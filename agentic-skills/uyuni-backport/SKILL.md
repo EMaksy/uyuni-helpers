@@ -5,7 +5,7 @@ description: Backport a Uyuni pull request or feature branch to a SUSE Manager p
 
 # Uyuni Backport
 
-Use the repository's `backports/uyuni-backport.sh` helper as the source of truth. Read [the helper documentation](../../backports/README.md) only when setup, options, or behavior beyond this workflow is relevant.
+Use the repository's `automated-scripts/uyuni-backport.sh` helper as the source of truth. Read [the script reference](../../automated-scripts/REFERENCE.md#backport-script) only when setup, options, or behavior beyond this workflow is relevant. The human version of this workflow is [Backporting to the product branches](../../automated-scripts/README.md#backporting-to-the-product-branches).
 
 ## Prepare
 
@@ -22,7 +22,18 @@ From the Uyuni checkout, run:
 git backport TARGET_BRANCH [OPTIONS]
 ```
 
-If the Git alias is unavailable, invoke `../../backports/uyuni-backport.sh` relative to this skill's directory with Bash and the same arguments. Do not improvise a separate backport implementation while the helper is available.
+If the Git alias is unavailable, invoke `../../automated-scripts/uyuni-backport.sh` relative to this skill's directory with Bash and the same arguments. Do not improvise a separate backport implementation while the helper is available.
+
+## Build, validate, then publish
+
+The team's default is to validate every backport locally before publishing it. Publish directly only when the user explicitly asks for that.
+
+1. Build the local branch: `git backport TARGET_BRANCH --no-push`, plus any options the user requested. Note the printed branch name.
+2. Validate it in the Spacewalk checkout. Checking out the branch changes the user's Spacewalk worktree, so confirm that it is clean first; otherwise ask. For npm dependency changes, run the dependency helper (`../../automated-scripts/uyuni-npm-dependency.sh`, relative to this skill's directory) with `validate PACKAGE`. Also confirm that `sha1sum web/package-lock.json` matches `web/html/src/vendors/npm.licenses.hash.txt`, run `git diff --check origin/TARGET_BRANCH...HEAD`, and check that `git status --short` shows no changed tracked files. For other changes, run focused tests that fit the change.
+3. If validation fails or changes tracked files, stop and report. Do not publish.
+4. Switch the Spacewalk checkout back to the branch it was on before; the helper refuses to rebuild a checked-out branch. From the Uyuni source branch, rerun the helper with the same options, without `--no-push`.
+
+For several targets, such as `Manager-5.1` and `Manager-5.2`, finish all steps for one target before starting the next, in the order the user gave.
 
 ## Handle the result
 
@@ -42,7 +53,7 @@ Report the PR link, target, and backport commit. State exactly which validation 
 The helper deliberately retains a temporary isolated Spacewalk worktree when a cherry-pick conflicts. Keep all resolution work in the printed worktree path; do not switch or modify the user's main Spacewalk worktree.
 
 1. Inspect `git status`, unmerged paths, the source commit, and the target-branch conventions before editing.
-2. Resolve conflicts semantically, stage them, and run `GIT_EDITOR=true git cherry-pick --continue`. Repeat for every queued commit.
+2. Resolve conflicts semantically, stage them, and run `GIT_EDITOR=true git cherry-pick --continue`. Repeat for every queued commit. For `web/package.json` and `web/package-lock.json`, take the target branch version (`git checkout --ours`) and repeat the npm bump; never merge the lockfile by hand. For the generated license files and `web/spacewalk-web.spec`, take the target branch version and regenerate them with `npm --prefix web ci` and `npm --prefix web run build`, staging the regenerated files when the build asks for it. If Git reports an empty commit, run `git cherry-pick --skip`.
 3. Run at least `git diff --check origin/TARGET_BRANCH...HEAD` and inspect the final name-status and stat. Run focused tests when the backport changes executable behavior and suitable tests are available.
 4. Follow the helper's printed recovery commands to create the local backport branch, push it, and create or update the PR. For an existing remote branch, use only the printed `--force-with-lease` form and expected remote SHA.
 5. Use full commit SHAs in the PR body, then verify the remote PR metadata.

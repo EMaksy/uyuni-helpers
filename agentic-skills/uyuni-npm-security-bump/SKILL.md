@@ -10,11 +10,15 @@ Uyuni's `web` project. Preserve the user's branches and unrelated changes.
 Prepare locally by default; commit, push, edit an existing PR, create a PR, or
 start a backport only when the user requests that external step.
 
-Use `../../npm-dependencies/uyuni-npm-dependency.sh` when its `bump` or
+Use `../../automated-scripts/uyuni-npm-dependency.sh` when its `bump` or
 `validate` mode fits the dependency. The workflow below remains authoritative
 for assessment, transitive-only dependencies, changelogs, review, and PR
 metadata. Resolve that helper relative to this skill's directory instead of
 assuming that `uyuni-helpers` is checked out at a fixed absolute path.
+
+Handle exactly one package per bump: one package per branch and per PR. The
+human version of this workflow is `../../manual-steps/README.md`; follow it for
+any detail this skill does not cover.
 
 ## Establish scope
 
@@ -68,6 +72,37 @@ a parent-package PR whose title never names the vulnerable package. Also check
 the alert's linked fix PR, open PR file lists and lockfile diffs, and the
 resolved version before concluding that no PR exists.
 
+Use `npm audit` only as a cross-check for the package in scope. Do not mix
+fixes for unrelated audit findings into the same bump; they are separate tasks.
+
+When the user asks which package to bump next, group the open npm alerts by
+package and recommend critical and high severity first, then the package that
+closes the most alerts:
+
+```bash
+gh api --method GET --paginate --slurp \
+  repos/uyuni-project/uyuni/dependabot/alerts \
+  --raw-field state=open --raw-field ecosystem=npm --raw-field per_page=100 \
+  | jq --raw-output 'add | group_by(.dependency.package.name)
+      | sort_by(-length)[]
+      | [length, .[0].dependency.package.name,
+         (map(.security_advisory.severity) | unique | join(","))]
+      | @tsv'
+```
+
+The target version is the highest first patched version among the package's
+open alerts. Confirm on the web that the fix is released: the advisory, the
+package's GitHub releases or changelog, and `npm view PACKAGE@VERSION version`.
+Give the user links to these sources.
+
+Find every place where Uyuni uses the package, and confirm that the bump needs
+no code changes. For a major version bump, check the release notes between the
+old and new version for breaking changes that affect these places:
+
+```bash
+git grep --line-number PACKAGE -- web/html/src ':!web/html/src/vendors'
+```
+
 ## Select or create the branch
 
 For an existing PR, inspect it before switching:
@@ -88,6 +123,12 @@ fast-forward it. Otherwise use only the tracking-branch form. A human commit on 
 Dependabot branch prevents Dependabot from automatically rebasing it; mention
 that consequence in the handoff.
 
+If no PR exists, prefer a Dependabot security update: ask the user to click
+**Create Dependabot security update** on one of the package's alert pages.
+When Dependabot opens the PR, continue on that PR as described above. If
+Dependabot posts an error on the alert instead, or the user declines, create
+your own branch.
+
 For a new bump, start a separate branch from the confirmed upstream base:
 
 ```bash
@@ -104,11 +145,17 @@ Let npm update `package-lock.json`; never hand-edit it. Use the smallest
 patched version unless the user or compatibility constraints justify a newer
 one.
 
-For a root declaration or root override, the helper can bump and validate:
+First find every declaration, including root `overrides`:
 
 ```bash
-bash /path/to/uyuni-helpers/npm-dependencies/uyuni-npm-dependency.sh \
-  bump PACKAGE VERSION
+rg -n '"PACKAGE"' web/package.json
+```
+
+For a root declaration or root override, the helper can bump and validate.
+`HELPERS_DIR` is the `uyuni-helpers` checkout that contains this guide:
+
+```bash
+bash HELPERS_DIR/automated-scripts/uyuni-npm-dependency.sh bump PACKAGE VERSION
 ```
 
 Otherwise use the equivalent npm operations from the repository root. Update
@@ -149,8 +196,9 @@ Create a fragment beside `web/spacewalk-web.changes`:
 web/spacewalk-web.changes.<author>.<topic>
 ```
 
-Infer `<author>` from the user's established fragments or Git identity; for
-this repository owner it is normally `emaksy`. Include the version change and
+Infer `<author>` from the current user's existing fragments in the target
+repository or from their Git identity. Never reuse another person's
+identifier; ask if it cannot be established. Include the version change and
 one entry per CVE:
 
 ```text
@@ -188,7 +236,9 @@ coverage, PR/commit tracker references, and bsc validity.
 
 ## Regenerate and validate
 
-Install exactly from the updated lockfile before generating licenses:
+Install exactly from the updated lockfile before generating licenses. Run
+these commands from the Uyuni repository root; its `package.json` forwards
+`build`, `lint:production`, `tsc`, `sort-package`, and `test` to `web/`:
 
 ```bash
 npm --prefix web ci --ignore-scripts --save=false
@@ -205,15 +255,21 @@ toolchain changes, and whenever the dependency can affect runtime behavior.
 Build Storybook when the affected introduction path or functionality is
 Storybook-specific.
 
-The build regenerates the npm license inventory and hash. Review those files,
-including removed or substituted packages and changed copyright text. Never
-commit `web/html/src/dist/`.
+The production build regenerates `npm.licenses.txt`,
+`npm.licenses.structured.js`, and `npm.licenses.hash.txt` in
+`web/html/src/vendors/` whenever the hash differs from the SHA-1 of
+`web/package-lock.json`. It then rewrites the `License:` line of
+`web/spacewalk-web.spec` from `npm.licenses.structured.js`. Its spec check then
+stops the build with "changes to license and/or spec files haven't been
+committed" while those files are unstaged. This is expected after a bump: stage
+`web/html/src/vendors/` and `web/spacewalk-web.spec`, then run the build again.
 
-The current generator can change the RPM expression
-`GPL-3.0-only OR MIT` to `GPL-3.0 OR MIT` even when the dependency did not
-change licensing. Compare against the base and dependency license set; remove
-that unrelated spec churn only when it is demonstrably unrelated. Never hide a
-real license change.
+Commit the generated files as the build produces them. Do not revert one of
+them on its own: the next build regenerates the spec from the structured list
+and fails its check again. Review the license changes, including removed or
+substituted packages. If the spec `License:` line changes, verify that a
+package's license really changed and mention it in the PR description. Never
+commit `web/html/src/dist/`.
 
 ## Double-check before handoff
 
@@ -258,8 +314,11 @@ New PRs are drafts unless the user requests otherwise. Their body should have:
 - `## Changelogs` naming the fragment; and
 - `## Validation` listing the commands and concrete test totals.
 
-For a personal fork, inspect remotes and normally push to `fork`, then use a
-qualified head such as `EMaksy:BRANCH`. For an existing upstream Dependabot
+Choose the push remote from `git remote -v` and the user's established
+practice. For an upstream `uyuni-project/uyuni` remote, use the plain branch
+name as the PR head. For a personal fork, use a qualified head such as
+`GITHUB_USER:BRANCH`, with the current user's GitHub login. Ask if the remote
+cannot be established unambiguously. For an existing upstream Dependabot
 PR, push its exact head branch to `origin` only if authorized, then update the
 existing PR title with `gh pr edit`. Verify the remote PR metadata and checks
 after any external write:
@@ -272,6 +331,10 @@ gh pr checks PR --repo uyuni-project/uyuni
 
 Confirm that `changelog_test` passed; do not treat other green checks as a
 substitute for it.
+
+In the handoff, remind the user that the PR needs reviews from the security
+champion and the frontend squad (`uyuni-project/frontend`). The agent's checks
+do not replace these reviews.
 
 ## Optional product backport
 
