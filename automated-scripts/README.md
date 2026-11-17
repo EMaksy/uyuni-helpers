@@ -99,27 +99,30 @@ package per branch and PR.
    gh api --method GET --paginate --slurp \
      repos/uyuni-project/uyuni/dependabot/alerts \
      --raw-field state=open --raw-field ecosystem=npm --raw-field per_page=100 \
-     | jq --raw-output 'add | group_by(.dependency.package.name)
-         | sort_by(-length)[]
+     | jq --raw-output '["ALERTS", "PACKAGE", "SEVERITIES"],
+         (add | group_by(.dependency.package.name) | sort_by(-length)[]
          | [length, .[0].dependency.package.name,
-            (map(.security_advisory.severity) | unique | join(","))]
-         | @tsv'
+            (map(.security_advisory.severity) | unique | join(","))])
+         | @tsv' \
+     | column --table --separator $'\t'
    ```
 
-2. List the open alerts of your package. The columns are alert number,
-   severity, CVE, and first fixed version. The highest fixed version fixes all
-   alerts:
+2. List the open alerts of your package. If an alert has no CVE, the table
+   shows its GitHub advisory ID (GHSA). The highest version in *FIXED IN* fixes
+   all alerts:
 
    ```bash
    PACKAGE=dompurify
-   gh api --method GET --paginate \
+   gh api --method GET --paginate --slurp \
      repos/uyuni-project/uyuni/dependabot/alerts \
      --raw-field state=open --raw-field ecosystem=npm \
      --raw-field package="$PACKAGE" --raw-field per_page=100 \
-     --jq '.[] | [.number, .security_advisory.severity,
-       (.security_advisory.cve_id // "no CVE"),
-       (.security_vulnerability.first_patched_version.identifier // "none")]
-       | @tsv'
+     | jq --raw-output '["ALERT", "SEVERITY", "CVE OR GHSA", "FIXED IN"],
+         (add[] | [.number, .security_advisory.severity,
+           (.security_advisory.cve_id // .security_advisory.ghsa_id),
+           (.security_vulnerability.first_patched_version.identifier // "none")])
+         | @tsv' \
+     | column --table --separator $'\t'
    ```
 
 Before you bump, confirm the fix in the advisory, on GitHub, and on npm. Check

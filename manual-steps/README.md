@@ -71,25 +71,28 @@ alerts: one bump can close all of them. Bump one package per branch and PR.
 3. Open the **Package** filter. The number next to each package is its count of
    open alerts.
 
-The same overview in a terminal lists each package with its number of alerts
-and their severities:
+The same overview in a terminal lists each package with its number of open
+alerts and their severities:
 
 ```bash
 gh api --method GET --paginate --slurp \
   repos/uyuni-project/uyuni/dependabot/alerts \
   --raw-field state=open --raw-field ecosystem=npm --raw-field per_page=100 \
-  | jq --raw-output 'add | group_by(.dependency.package.name)
-      | sort_by(-length)[]
+  | jq --raw-output '["ALERTS", "PACKAGE", "SEVERITIES"],
+      (add | group_by(.dependency.package.name) | sort_by(-length)[]
       | [length, .[0].dependency.package.name,
-         (map(.security_advisory.severity) | unique | join(","))]
-      | @tsv'
+         (map(.security_advisory.severity) | unique | join(","))])
+      | @tsv' \
+  | column --table --separator $'\t'
 ```
 
 The output is similar to this:
 
 ```text
-5       dompurify       critical,high,low
-5       fast-uri        low,medium
+ALERTS  PACKAGE               SEVERITIES
+5       dompurify             critical,high,low
+5       fast-uri              low,medium
+2       serialize-javascript  high,low
 ```
 
 ## Choosing the target version
@@ -101,22 +104,25 @@ step keeps the risk of breaking changes low.
 
    ```bash
    PACKAGE=dompurify
-   gh api --method GET --paginate \
+   gh api --method GET --paginate --slurp \
      repos/uyuni-project/uyuni/dependabot/alerts \
      --raw-field state=open --raw-field ecosystem=npm \
      --raw-field package="$PACKAGE" --raw-field per_page=100 \
-     --jq '.[] | [.number, .security_advisory.severity,
-       (.security_advisory.cve_id // "no CVE"),
-       (.security_vulnerability.first_patched_version.identifier // "none")]
-       | @tsv'
+     | jq --raw-output '["ALERT", "SEVERITY", "CVE OR GHSA", "FIXED IN"],
+         (add[] | [.number, .security_advisory.severity,
+           (.security_advisory.cve_id // .security_advisory.ghsa_id),
+           (.security_vulnerability.first_patched_version.identifier // "none")])
+         | @tsv' \
+     | column --table --separator $'\t'
    ```
 
-   The columns are alert number, severity, CVE, and first fixed version. The
-   highest fixed version fixes all alerts, here `3.4.17`:
+   If an alert has no CVE, the table shows its GitHub advisory ID (GHSA). The
+   highest version in *FIXED IN* fixes all alerts, here `3.4.17`:
 
    ```text
-   593     critical        no CVE  3.4.17
-   547     low     no CVE  3.4.16
+   ALERT  SEVERITY  CVE OR GHSA          FIXED IN
+   593    critical  GHSA-cg2g-xh64-v4q7  3.4.17
+   547    low       GHSA-6688-9rhm-gjv2  3.4.16
    ```
 
 2. Check that npm publishes this version, and show the version that Uyuni uses
