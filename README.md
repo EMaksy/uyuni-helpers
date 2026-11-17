@@ -25,14 +25,14 @@ Keep this workflow in mind. The guides explain every step in detail.
 
 ## Choosing a guide
 
-All three guides cover the same workflow. Work through the manual guide once,
+All three guides cover the same workflow. Work through the manual steps once,
 even if you use the scripts or an agent later.
 
 | Guide | Use it to |
 | --- | --- |
-| [1. By hand](1-manual/README.md) | Understand every step and run each command yourself |
-| [2. With scripts](2-scripts/README.md) | Validate the bump and create the backports with two helper scripts |
-| [3. With an AI agent](3-ai-agent/README.md) | Let an agent research, prepare, and backport, while you check the result |
+| [Manual steps](manual-steps/README.md) | Understand every step and run each command yourself |
+| [Automated scripts](automated-scripts/README.md) | Validate the bump and create the backports with two helper scripts |
+| [Agentic skills](agentic-skills/README.md) | Let an AI agent research, prepare, and backport, while you check the result |
 
 ## Good to know
 
@@ -41,23 +41,24 @@ even if you use the scripts or an agent later.
   regenerates it together with `npm.licenses.txt`. Never edit them by hand.
 - **One package per PR.** Small changes are easier to review and to backport.
 - **Draft first.** Keep PRs as drafts until CI passes.
-- **Copy and paste.** The commands use shell variables that you set once, so
-  you can paste them unchanged.
+- **Copy and paste.** The commands use shell variables. Each part of a guide
+  sets the variables it needs, so you can paste the commands unchanged.
 
 ## Requirements
 
 You need access to the Dependabot alerts of `uyuni-project/uyuni`, and push
 access to `uyuni-project/uyuni` and `SUSE/spacewalk`. You also need Git, the
 GitHub CLI, `jq`, Node.js 22, and npm 10 or later. For details, see the
-[manual requirements](1-manual/README.md#requirements).
+[manual requirements](manual-steps/README.md#requirements).
 
 ## Repository layout
 
 ```text
 uyuni-helpers/
-├── 1-manual/       # guide: the workflow by hand
-├── 2-scripts/      # guide, reference, and the two helper scripts
-└── 3-ai-agent/     # guide and the skills for AI agents
+├── manual-steps/         # guide: the workflow by hand
+├── automated-scripts/    # guide, reference, and the two helper scripts
+├── agentic-skills/       # guide and the skills for AI agents
+└── LICENSE               # MIT License
 ```
 
 ## More information
@@ -65,3 +66,8 @@ uyuni-helpers/
 - [Uyuni changelog guidelines](https://github.com/uyuni-project/uyuni/wiki/Contributing#changelogs)
 - [GitHub: Viewing and updating Dependabot alerts](https://docs.github.com/en/code-security/dependabot/dependabot-alerts/viewing-and-updating-dependabot-alerts)
 - [SUSE CVE database](https://www.suse.com/security/cve/)
+
+## License
+
+This repository is available under the [MIT License](LICENSE). You can use,
+change, and share it freely, as long as you keep the license notice.

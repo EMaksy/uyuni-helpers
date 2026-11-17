@@ -4,8 +4,20 @@ This reference describes the options and the behavior of both helper scripts.
 For the workflow, see the [scripts guide](README.md). For the installation, see
 [Installing the scripts](README.md#installing-the-scripts).
 
-- [npm dependency script](#npm-dependency-script)
-- [Backport script](#backport-script)
+- [Script reference](#script-reference)
+  - [npm dependency script](#npm-dependency-script)
+    - [Usage](#usage)
+    - [What bump changes](#what-bump-changes)
+    - [Validation steps](#validation-steps)
+    - [Limitations](#limitations)
+  - [Backport script](#backport-script)
+    - [Usage](#usage-1)
+    - [Configuration](#configuration)
+    - [Checks before any change](#checks-before-any-change)
+    - [Generated branch and PR](#generated-branch-and-pr)
+    - [Reruns](#reruns)
+    - [Resolving a cherry-pick conflict](#resolving-a-cherry-pick-conflict)
+    - [Limitations](#limitations-1)
 
 ## npm dependency script
 
@@ -117,7 +129,7 @@ script.
 1. Change to the script directory:
 
    ```bash
-   cd ~/Work/uyuni-helpers/2-scripts
+   cd ~/Work/uyuni-helpers/automated-scripts
    ```
 
 2. Copy the template:
@@ -225,7 +237,7 @@ path and the exact commands to finish. Resolve the conflict in that worktree:
    ```
 
 3. Resolve the files as described in
-   [Resolving backport conflicts](../1-manual/README.md#resolving-backport-conflicts).
+   [Resolving backport conflicts](../manual-steps/README.md#resolving-backport-conflicts).
 
 4. Stage the resolved files:
 
@@ -247,8 +259,8 @@ If Git reports a commit as empty, its change exists on the target already. Run
 
 After `--no-push`, the printed commands end after creating the local branch.
 Running the script again would stop on the same conflict. Push the branch and
-create the PR manually, as in steps 9–10 of
-[Backporting to the product branches](../1-manual/README.md#backporting-to-the-product-branches).
+create the PR manually, as in steps 11–12 of
+[Backporting to the product branches](../manual-steps/README.md#backporting-to-the-product-branches).
 
 Remove the worktree only after the PR exists:
 
@@ -257,7 +269,7 @@ git -C ~/Work/spacewalk worktree remove /tmp/uyuni-backport-XXXXXX/worktree
 ```
 
 For schema migrations, do not accept the rename that Git suggests. See
-[Schema migration directories](../3-ai-agent/skills/uyuni-backport/SKILL.md#schema-migration-directories).
+[Schema migration directories](../agentic-skills/uyuni-backport/SKILL.md#schema-migration-directories).
 
 ### Limitations
 

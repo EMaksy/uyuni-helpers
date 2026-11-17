@@ -7,22 +7,23 @@ draft pull request (PR). Finally, you backport the fix to the SUSE Manager
 product branches.
 
 Work through this guide by hand at least once. The
-[scripts](../2-scripts/README.md) and the [AI agent](../3-ai-agent/README.md)
+[scripts](../automated-scripts/README.md) and the [AI agent](../agentic-skills/README.md)
 automate the same steps, and you need to understand what they do.
 
 - [Bumping and backporting npm dependencies by hand](#bumping-and-backporting-npm-dependencies-by-hand)
   - [Requirements](#requirements)
   - [Finding the alerts to fix](#finding-the-alerts-to-fix)
   - [Choosing the target version](#choosing-the-target-version)
-  - [Preparing your terminal](#preparing-your-terminal)
-  - [Creating the Uyuni change](#creating-the-uyuni-change)
-    - [Using a Dependabot security update](#using-a-dependabot-security-update)
-    - [Bumping manually](#bumping-manually)
-  - [Regenerating the license files](#regenerating-the-license-files)
-  - [Adding the changelog](#adding-the-changelog)
-  - [Validating the change](#validating-the-change)
-  - [Reviewing and committing](#reviewing-and-committing)
-  - [Opening the draft pull request](#opening-the-draft-pull-request)
+  - [Bumping the dependency](#bumping-the-dependency)
+    - [Setting the variables](#setting-the-variables)
+    - [Creating the Uyuni change](#creating-the-uyuni-change)
+      - [Using a Dependabot security update](#using-a-dependabot-security-update)
+      - [Bumping manually](#bumping-manually)
+    - [Regenerating the license files](#regenerating-the-license-files)
+    - [Adding the changelog](#adding-the-changelog)
+    - [Validating the change](#validating-the-change)
+    - [Reviewing and committing](#reviewing-and-committing)
+    - [Opening the draft pull request](#opening-the-draft-pull-request)
   - [Backporting to the product branches](#backporting-to-the-product-branches)
     - [Resolving backport conflicts](#resolving-backport-conflicts)
   - [Getting the reviews](#getting-the-reviews)
@@ -185,7 +186,7 @@ step keeps the risk of breaking changes low.
 >
 > An AI assistant can summarize the advisories and find the release that
 > contains the fix. Verify every claim against the advisory, the GitHub
-> repository, and npm. See [Researching with an agent](../3-ai-agent/README.md#researching-the-next-bump).
+> repository, and npm. See [Researching with an agent](../agentic-skills/README.md#researching-the-next-bump).
 
 These cases need special handling:
 
@@ -196,17 +197,27 @@ These cases need special handling:
 | A CVE has no SUSE Bugzilla entry | Ask Security for one before you write the changelog. |
 | An open PR already fixes the alert | Continue on that PR instead of opening a new one. |
 
-## Preparing your terminal
+## Bumping the dependency
 
-The commands in this guide use shell variables, so you can copy and paste them
-unchanged. You set `PACKAGE`, `VERSION`, `OLD`, and `REFS` in the previous
-section.
+This part creates the Uyuni change, from the branch to the draft PR. It
+starts by setting the variables that all its steps use, so you can start it
+in a new terminal.
 
-1. Set your changelog identifier. Use the same one as in your earlier changelog
-   files, usually your GitHub or SUSE user name:
+### Setting the variables
+
+The commands use shell variables, so you can copy and paste them unchanged.
+All steps of this part use the variables from this section.
+
+1. Set the values that you found in the previous section, and your changelog
+   identifier. For `AUTHOR`, use the same identifier as in your earlier
+   changelog files, usually your GitHub or SUSE user name:
 
    ```bash
-   AUTHOR=jdoe
+   PACKAGE=dompurify                      # package to bump
+   OLD=3.4.15                             # current version
+   VERSION=3.4.17                         # new version
+   REFS="CVE-2026-104844, bsc#1284190"    # CVE and bsc# pairs, or empty
+   AUTHOR=jdoe                            # your changelog identifier
    ```
 
 2. Derive the branch name, the changelog file name, and the PR title:
@@ -228,12 +239,12 @@ section.
 > Variables exist only in the current terminal. In a new terminal, set them
 > again.
 
-## Creating the Uyuni change
+### Creating the Uyuni change
 
 Try a Dependabot security update first: Dependabot then creates the branch and
 the bump for you. If Dependabot cannot do it, bump the package manually.
 
-### Using a Dependabot security update
+#### Using a Dependabot security update
 
 1. Open one of the package's alerts.
 2. Click **Create Dependabot security update** at the top of the alert page. If
@@ -277,7 +288,7 @@ files and the changelog in the next sections.
 > After you push your own commit to a Dependabot branch, Dependabot no longer
 > rebases that branch automatically.
 
-### Bumping manually
+#### Bumping manually
 
 1. Change to your Uyuni clone:
 
@@ -355,7 +366,7 @@ files and the changelog in the next sections.
 
 Never edit `package-lock.json` by hand.
 
-## Regenerating the license files
+### Regenerating the license files
 
 The production build generates the license files from the installed packages.
 Never edit them by hand.
@@ -400,7 +411,7 @@ these files.
 If `web/spacewalk-web.spec` changed, a package changed its license. Check that
 the new license is correct and mention it in the PR description.
 
-## Adding the changelog
+### Adding the changelog
 
 Every bump needs a changelog fragment in `web/`. It lists the version change and
 one entry per CVE with its SUSE Bugzilla number.
@@ -439,7 +450,7 @@ Follow these rules:
 - Add one entry for each CVE, and verify each `bsc#` number.
 - Keep the version line, even when CVE entries are present.
 
-## Validating the change
+### Validating the change
 
 Run the same checks as the frontend CI. Run each command from `~/Work/uyuni`
 and fix any failure before you continue.
@@ -486,15 +497,7 @@ and fix any failure before you continue.
    npm --prefix web run build
    ```
 
-8. Check that the license hash matches the lockfile:
-
-   ```bash
-   [ "$(sha1sum web/package-lock.json | awk '{print $1}')" = \
-     "$(cat web/html/src/vendors/npm.licenses.hash.txt)" ] \
-     && echo "license hash OK" || echo "license hash MISMATCH"
-   ```
-
-9. Check for whitespace errors in your changes:
+8. Check for whitespace errors in your changes:
 
    ```bash
    git diff --check HEAD
@@ -506,7 +509,7 @@ If Storybook uses the package, also build Storybook:
 npm --prefix web run build-storybook
 ```
 
-## Reviewing and committing
+### Reviewing and committing
 
 Review the complete change before you commit it.
 
@@ -548,7 +551,7 @@ Check that:
    git commit --message "Bump $PACKAGE from $OLD to $VERSION"
    ```
 
-## Opening the draft pull request
+### Opening the draft pull request
 
 Open the PR as a draft and wait until CI passes.
 
@@ -605,46 +608,65 @@ gh pr checks "$PR" --repo uyuni-project/uyuni --watch
 
 When CI passes on the Uyuni PR, backport the change to each maintained product
 branch in `SUSE/spacewalk`. Currently these are `Manager-5.1` and `Manager-5.2`.
-Run the procedure once per branch, starting with `Manager-5.1`.
+This section sets its own variables, so you can start it in a new terminal.
 
-1. Set the target branch and the backport branch name:
+1. Set the Uyuni PR number and the bumped package:
+
+   ```bash
+   PR=12345              # Uyuni PR number
+   PACKAGE=dompurify     # bumped package, used for validation
+   VERSION=3.4.17        # new version, used to resolve conflicts
+   ```
+
+2. Read the branch name and the title of the Uyuni PR:
+
+   ```bash
+   BRANCH=$(gh pr view "$PR" --repo uyuni-project/uyuni \
+     --json headRefName --jq .headRefName)
+   TITLE=$(gh pr view "$PR" --repo uyuni-project/uyuni \
+     --json title --jq .title)
+   ```
+
+3. Set the target branch and derive the backport branch name. The name is the
+   same as the one the backport script creates:
 
    ```bash
    TARGET=Manager-5.1
-   BACKPORT="backport/uyuni-$PR-$SLUG-$VERSION-to-$TARGET"
+   BACKPORT="backport/uyuni-$PR-$(printf '%s' "$BRANCH" \
+     | tr -cs 'A-Za-z0-9._-' '-')-to-$TARGET"
    ```
 
-2. Change to your Spacewalk clone:
+4. Change to your Spacewalk clone:
 
    ```bash
    cd ~/Work/spacewalk
    ```
 
-3. Check that the working tree is clean:
+5. Check that the working tree is clean:
 
    ```bash
    git status --short --branch
    ```
 
-4. Fetch the target branch:
+6. Fetch the target branch:
 
    ```bash
    git fetch origin "$TARGET"
    ```
 
-5. Fetch the commits of the Uyuni PR:
+7. Fetch the commits of the Uyuni PR:
 
    ```bash
    git fetch https://github.com/uyuni-project/uyuni.git "pull/$PR/head"
    ```
 
-6. Create the backport branch from the target branch:
+8. Create the backport branch from the target branch:
 
    ```bash
    git switch --create "$BACKPORT" "origin/$TARGET"
    ```
 
-7. Apply the commits of the Uyuni PR in order:
+9. Apply the commits of the Uyuni PR in order:
 
    ```bash
    git cherry-pick $(gh pr view "$PR" --repo uyuni-project/uyuni \
@@ -654,43 +676,43 @@ Run the procedure once per branch, starting with `Manager-5.1`.
    If Git reports a conflict, resolve it as described in
    [Resolving backport conflicts](#resolving-backport-conflicts).
 
-8. Validate the backport with steps 1–8 of
-   [Validating the change](#validating-the-change). Product branches have their
-   own dependency trees, so a passing Uyuni PR does not prove that the backport
-   works. Then check the backport commits for whitespace errors:
+10. Validate the backport with steps 1–7 of
+    [Validating the change](#validating-the-change). Product branches have
+    their own dependency trees, so a passing Uyuni PR does not prove that the
+    backport works. Then check the backport commits for whitespace errors:
 
-   ```bash
-   git diff --check "origin/$TARGET...HEAD"
-   ```
+    ```bash
+    git diff --check "origin/$TARGET...HEAD"
+    ```
 
-   If the build regenerated license files, stage them and add them to the last
-   commit:
+    If the build regenerated license files, stage them and add them to the
+    last commit:
 
-   ```bash
-   git add web/html/src/vendors/ web/spacewalk-web.spec
-   ```
+    ```bash
+    git add web/html/src/vendors/ web/spacewalk-web.spec
+    ```
 
-   ```bash
-   git commit --amend --no-edit
-   ```
+    ```bash
+    git commit --amend --no-edit
+    ```
 
-9. Push the backport branch:
+11. Push the backport branch:
 
-   ```bash
-   git push --set-upstream origin "$BACKPORT"
-   ```
+    ```bash
+    git push --set-upstream origin "$BACKPORT"
+    ```
 
-10. Create the draft PR. When `gh` asks for the description, add
-    `Backport of https://github.com/uyuni-project/uyuni/pull/NUMBER`:
+12. Create the draft PR. When `gh` asks for the description, add a line
+    `Backport of` followed by the link to the Uyuni PR:
 
     ```bash
     gh pr create --repo SUSE/spacewalk --draft \
       --base "$TARGET" --head "$BACKPORT" --title "${TARGET#Manager-} - $TITLE"
     ```
 
-11. Repeat from step 1 with `TARGET=Manager-5.2`.
+13. Repeat from step 3 with `TARGET=Manager-5.2`.
 
-12. Add both Spacewalk PR links to the `Port(s):` line of the Uyuni PR
+14. Add both Spacewalk PR links to the `Port(s):` line of the Uyuni PR
     description.
 
 ### Resolving backport conflicts
@@ -741,9 +763,16 @@ commit. Resolve conflicts in these files as follows:
 
 ## Getting the reviews
 
-Ask for reviews when CI passes on the Uyuni PR.
+Ask for reviews when CI passes on the Uyuni PR. This section sets its own
+variables, so you can start it in a new terminal.
 
-1. Mark the Uyuni PR ready for review:
+1. Set the Uyuni PR number:
+
+   ```bash
+   PR=12345
+   ```
+
+2. Mark the Uyuni PR ready for review:
 
    ```bash
    gh pr ready "$PR" --repo uyuni-project/uyuni
@@ -752,20 +781,32 @@ Ask for reviews when CI passes on the Uyuni PR.
    GitHub then requests a review from the frontend squad
    (`uyuni-project/frontend`), because the PR changes files in `web/html/`.
 
-2. Request a review from your team's security champion. Replace
+3. Request a review from your team's security champion. Replace
    `GITHUB_LOGIN` with their GitHub login:
 
    ```bash
    gh pr edit "$PR" --repo uyuni-project/uyuni --add-reviewer GITHUB_LOGIN
    ```
 
-3. Wait for both approvals.
+4. Wait for both approvals.
 
-4. Mark the Spacewalk PRs ready for review once the Uyuni PR is approved.
+5. List the Spacewalk PRs of the backports:
 
-If the Uyuni PR changes during the review, update both backports. Rebuild each
-backport branch as in [Backporting to the product branches](#backporting-to-the-product-branches),
-then push it with `git push --force-with-lease`.
+   ```bash
+   gh pr list --repo SUSE/spacewalk --search "head:backport/uyuni-$PR-"
+   ```
+
+6. Mark each Spacewalk PR ready for review. Replace `NUMBER` with a PR number
+   from the list:
+
+   ```bash
+   gh pr ready NUMBER --repo SUSE/spacewalk
+   ```
+
+If the Uyuni PR changes during the review, update both backports. Repeat
+[Backporting to the product branches](#backporting-to-the-product-branches)
+with two changes: in step 8, use `git switch --force-create`, and in step 11,
+push with `git push --force-with-lease`.
 
 ## Troubleshooting
 

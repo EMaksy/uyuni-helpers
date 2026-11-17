@@ -1,20 +1,21 @@
 # Automating the workflow with an AI agent
 
 An AI agent can do the research, prepare the bump, and backport it for you. It
-follows the instructions in [`skills/`](skills/) and uses the
-[helper scripts](../2-scripts/README.md). You stay responsible for the result:
-you check the agent's work, watch CI, and get the reviews.
+follows the skills in this directory and uses the
+[automated scripts](../automated-scripts/README.md). You stay responsible for
+the result: you check the agent's work, watch CI, and get the reviews.
 
-The agent automates the [manual workflow](../1-manual/README.md). Read that
+The agent automates the [manual steps](../manual-steps/README.md). Read that
 guide first, so you can judge what the agent does.
 
-- [Requirements](#requirements)
-- [Making the skills available](#making-the-skills-available)
-- [Researching the next bump](#researching-the-next-bump)
-- [Preparing the bump](#preparing-the-bump)
-- [Backporting with the agent](#backporting-with-the-agent)
-- [Checking the agent's work](#checking-the-agents-work)
-- [Tips](#tips)
+- [Automating the workflow with an AI agent](#automating-the-workflow-with-an-ai-agent)
+  - [Requirements](#requirements)
+  - [Making the skills available](#making-the-skills-available)
+  - [Researching the next bump](#researching-the-next-bump)
+  - [Preparing the bump](#preparing-the-bump)
+  - [Backporting with the agent](#backporting-with-the-agent)
+  - [Checking the agent's work](#checking-the-agents-work)
+  - [Tips](#tips)
 
 ## Requirements
 
@@ -22,9 +23,14 @@ You need the following:
 
 - An AI agent that can run commands and edit files in your clones, for example
   Claude Code, GitHub Copilot in agent mode, or Gemini CLI.
-- Everything from the [manual requirements](../1-manual/README.md#requirements).
-  The agent works with your Git and GitHub CLI logins.
-- The installed scripts, see [Installing the scripts](../2-scripts/README.md#installing-the-scripts).
+- Access to the Dependabot alerts of `uyuni-project/uyuni`, and push access to
+  `uyuni-project/uyuni` and `SUSE/spacewalk`. The agent works with your Git and
+  GitHub CLI logins.
+- Git, the GitHub CLI (`gh`), `jq`, Node.js 22, and npm 10 or later.
+- Clones of both repositories in `~/Work/uyuni` and `~/Work/spacewalk`.
+- The scripts, installed as described in
+  [Installing the scripts](../automated-scripts/README.md#installing-the-scripts).
+  The skills call them.
 
 ## Making the skills available
 
@@ -33,8 +39,8 @@ which commands to run, and when to stop and ask.
 
 | Skill | Purpose |
 | --- | --- |
-| [`uyuni-npm-security-bump`](skills/uyuni-npm-security-bump/SKILL.md) | Research an alert, choose the version, bump the package, add the changelog, regenerate the license files, validate, and prepare the PR |
-| [`uyuni-backport`](skills/uyuni-backport/SKILL.md) | Build, validate, and publish the backports, and resolve conflicts |
+| [`uyuni-npm-security-bump`](uyuni-npm-security-bump/SKILL.md) | Research an alert, choose the version, bump the package, add the changelog, regenerate the license files, validate, and prepare the PR |
+| [`uyuni-backport`](uyuni-backport/SKILL.md) | Build, validate, and publish the backports, and resolve conflicts |
 
 Every agent can use a skill when you name its file in the request. All example
 requests in this guide do that.
@@ -51,14 +57,14 @@ into your personal skills directory:
 2. Link the security bump skill:
 
    ```bash
-   ln -s ~/Work/uyuni-helpers/3-ai-agent/skills/uyuni-npm-security-bump \
+   ln -s ~/Work/uyuni-helpers/agentic-skills/uyuni-npm-security-bump \
      ~/.claude/skills/
    ```
 
 3. Link the backport skill:
 
    ```bash
-   ln -s ~/Work/uyuni-helpers/3-ai-agent/skills/uyuni-backport \
+   ln -s ~/Work/uyuni-helpers/agentic-skills/uyuni-backport \
      ~/.claude/skills/
    ```
 
@@ -71,7 +77,7 @@ Let the agent find the next package to bump and the version that fixes it. Start
 the agent in `~/Work/uyuni` and send this request:
 
 ```text
-Read ~/Work/uyuni-helpers/3-ai-agent/skills/uyuni-npm-security-bump/SKILL.md
+Read ~/Work/uyuni-helpers/agentic-skills/uyuni-npm-security-bump/SKILL.md
 List the open npm Dependabot alerts of uyuni-project/uyuni, grouped by package,
 with their severities. Recommend the next package: critical first, then the one
 that closes the most alerts. For that package, find the smallest version that
@@ -82,7 +88,7 @@ Do not change any files. Link every source.
 ```
 
 Open the source links and check the result before you continue. Compare it with
-[Choosing the target version](../1-manual/README.md#choosing-the-target-version).
+[Choosing the target version](../manual-steps/README.md#choosing-the-target-version).
 
 ## Preparing the bump
 
@@ -91,7 +97,7 @@ in the request:
 
 ```text
 Read and follow
-~/Work/uyuni-helpers/3-ai-agent/skills/uyuni-npm-security-bump/SKILL.md
+~/Work/uyuni-helpers/agentic-skills/uyuni-npm-security-bump/SKILL.md
 to bump PACKAGE to VERSION in ~/Work/uyuni.
 Use a Dependabot security update if one exists, otherwise create the branch
 from origin/master. Add the changelog, regenerate the license files, and run
@@ -102,7 +108,7 @@ When the agent asks you to create a Dependabot security update, click
 **Create Dependabot security update** on the alert page.
 
 Review the result as in
-[Reviewing and committing](../1-manual/README.md#reviewing-and-committing).
+[Reviewing and committing](../manual-steps/README.md#reviewing-and-committing).
 Then commit, push, and open the draft PR yourself. Alternatively, let the agent
 do it:
 
@@ -119,7 +125,7 @@ the Uyuni PR number:
 
 ```text
 Read and follow
-~/Work/uyuni-helpers/3-ai-agent/skills/uyuni-backport/SKILL.md
+~/Work/uyuni-helpers/agentic-skills/uyuni-backport/SKILL.md
 to backport Uyuni PR #NUMBER to Manager-5.1 and then Manager-5.2.
 Build and validate each backport locally before you publish it.
 ```
@@ -151,14 +157,14 @@ points yourself:
   number that you cannot find there.
 - `package.json` and the lockfile change only the package and its own
   dependencies.
-- The license files are regenerated, and the license hash matches the lockfile.
+- The regenerated license files are part of the commit.
 - No changelog line is longer than 67 characters.
 - CI passes on every PR, including `changelog_test`.
 - Each Spacewalk PR targets the right branch, is a draft, and has a title such
   as `5.1 - Bump …`.
 
 The agent's checks do not replace the reviews by the security champion and the
-frontend squad. Get them as in [Getting the reviews](../1-manual/README.md#getting-the-reviews).
+frontend squad. Get them as in [Getting the reviews](../manual-steps/README.md#getting-the-reviews).
 
 ## Tips
 
@@ -168,4 +174,4 @@ frontend squad. Get them as in [Getting the reviews](../1-manual/README.md#getti
 - If the agent cannot run commands, for example in a web chat, paste the skill
   and the command output. Then run the commands it suggests yourself.
 - If the agent gets stuck, continue by hand with the
-  [manual guide](../1-manual/README.md) or the [scripts](../2-scripts/README.md).
+  [manual guide](../manual-steps/README.md) or the [scripts](../automated-scripts/README.md).

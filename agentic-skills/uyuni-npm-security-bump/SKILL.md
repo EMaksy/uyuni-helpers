@@ -10,14 +10,14 @@ Uyuni's `web` project. Preserve the user's branches and unrelated changes.
 Prepare locally by default; commit, push, edit an existing PR, create a PR, or
 start a backport only when the user requests that external step.
 
-Use `../../../2-scripts/uyuni-npm-dependency.sh` when its `bump` or
+Use `../../automated-scripts/uyuni-npm-dependency.sh` when its `bump` or
 `validate` mode fits the dependency. The workflow below remains authoritative
 for assessment, transitive-only dependencies, changelogs, review, and PR
 metadata. Resolve that helper relative to this skill's directory instead of
 assuming that `uyuni-helpers` is checked out at a fixed absolute path.
 
 Handle exactly one package per bump: one package per branch and per PR. The
-human version of this workflow is `../../../1-manual/README.md`; follow it for
+human version of this workflow is `../../manual-steps/README.md`; follow it for
 any detail this skill does not cover.
 
 ## Establish scope
@@ -155,7 +155,7 @@ For a root declaration or root override, the helper can bump and validate.
 `HELPERS_DIR` is the `uyuni-helpers` checkout that contains this guide:
 
 ```bash
-bash HELPERS_DIR/2-scripts/uyuni-npm-dependency.sh bump PACKAGE VERSION
+bash HELPERS_DIR/automated-scripts/uyuni-npm-dependency.sh bump PACKAGE VERSION
 ```
 
 Otherwise use the equivalent npm operations from the repository root. Update
