@@ -145,10 +145,14 @@ Let npm update `package-lock.json`; never hand-edit it. Use the smallest
 patched version unless the user or compatibility constraints justify a newer
 one.
 
-First find every declaration, including root `overrides`:
+First find every declaration, including root `overrides`. Do not use
+`npm pkg get` with several keys for this: it prints nothing when one key is
+missing.
 
 ```bash
-rg -n '"PACKAGE"' web/package.json
+jq --arg p PACKAGE '{dependencies: .dependencies[$p],
+  devDependencies: .devDependencies[$p], overrides: .overrides[$p]}
+  | with_entries(select(.value != null))' web/package.json
 ```
 
 For a root declaration or root override, the helper can bump and validate.
@@ -158,14 +162,19 @@ For a root declaration or root override, the helper can bump and validate.
 bash HELPERS_DIR/automated-scripts/uyuni-npm-dependency.sh bump PACKAGE VERSION
 ```
 
-Otherwise use the equivalent npm operations from the repository root. Update
-every existing declaration of the package, including root `overrides`, then
-resolve the lockfile with npm. An exact direct bump typically uses:
+Otherwise use the equivalent npm operations from the repository root. Set the
+new version in every existing declaration, keeping a leading `^` or `~`, then
+let npm resolve the lockfile:
 
 ```bash
-npm --prefix web install PACKAGE@VERSION \
-  --save-exact --package-lock-only --ignore-scripts
+npm --prefix web pkg set 'dependencies.PACKAGE=VERSION' 'overrides.PACKAGE=VERSION'
+npm --prefix web install --package-lock-only --ignore-scripts
 ```
+
+Name only the entries that exist. Do not use `npm install PACKAGE@VERSION` for
+a package that also has an override: npm rejects it with `EOVERRIDE`, whatever
+the order of the commands. `npm ci` then reports a misleading "no
+package-lock.json" error that hides the real cause.
 
 For a purely transitive dependency, `npm update` may choose the newest version
 allowed by the parent instead of the requested minimum. Verify the result. If

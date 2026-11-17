@@ -27,7 +27,8 @@ You need the following:
   `uyuni-project/uyuni` and `SUSE/spacewalk`. The agent works with your Git and
   GitHub CLI logins.
 - Git, the GitHub CLI (`gh`), `jq`, Node.js 22, and npm 10 or later.
-- Clones of both repositories in `~/Work/uyuni` and `~/Work/spacewalk`.
+- Clones of both repositories in `~/Work/uyuni` and `~/Work/spacewalk`. If
+  your clones are in another place, adjust these paths in the requests.
 - Git set up to sign your commits, because the agent commits with your Git
   configuration. Check it with `git config --get commit.gpgsign`, which prints
   `true`. To set it up, see
@@ -112,7 +113,7 @@ When the agent asks you to create a Dependabot security update, click
 **Create Dependabot security update** on the alert page.
 
 Review the result as in
-[Reviewing and committing](../manual-steps/README.md#reviewing-and-committing).
+[Committing and opening the draft PR](../manual-steps/README.md#committing-and-opening-the-draft-pr).
 Then commit, push, and open the draft PR yourself. Alternatively, let the agent
 do it:
 
