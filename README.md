@@ -21,7 +21,7 @@ Keep this workflow in mind. The guides explain every step in detail.
 7. Review `package.json`, `package-lock.json`, and how Uyuni uses the package.
 8. Open a draft PR and wait until CI passes.
 9. Backport the change to `Manager-5.1` and `Manager-5.2` in `SUSE/spacewalk`.
-   Resolve conflicts there, and validate locally: these branches run little CI.
+   Resolve conflicts there, and validate locally before you push.
 10. Wait for the reviews by the security champion and the frontend squad. A
     reviewer then merges the PRs.
 

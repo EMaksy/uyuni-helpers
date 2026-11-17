@@ -1,12 +1,9 @@
 # Bumping and backporting npm dependencies by hand
 
-This guide fixes an npm security alert in Uyuni step by step, without scripts
-or AI. It also backports the fix to the SUSE Manager product branches. Work
-through it once by hand: the [scripts](../automated-scripts/README.md) and the
-[AI agent](../agentic-skills/README.md) automate the same steps.
-
-Copy each command block as a whole. Each part starts by setting the variables
-it needs, so you can start any part in a new terminal.
+This guide fixes an npm security alert in Uyuni and backports the fix to the
+SUSE Manager product branches, step by step. Copy each command block as a
+whole. Each part sets the variables it needs, so you can start any part in a
+new terminal.
 
 - [Bumping and backporting npm dependencies by hand](#bumping-and-backporting-npm-dependencies-by-hand)
   - [Requirements](#requirements)
@@ -25,7 +22,6 @@ it needs, so you can start any part in a new terminal.
     - [Resolving backport conflicts](#resolving-backport-conflicts)
   - [Getting the reviews](#getting-the-reviews)
   - [Troubleshooting](#troubleshooting)
-  - [Lessons learned](#lessons-learned)
   - [More information](#more-information)
 
 ## Requirements
@@ -97,8 +93,7 @@ ALERTS  PACKAGE               SEVERITIES
 
 ## Choosing the target version
 
-Choose the smallest version that fixes every open alert of the package. A small
-step keeps the risk of breaking changes low.
+Choose the smallest version that fixes every open alert of the package.
 
 1. List the open alerts of the package. Replace `dompurify` with your package:
 
@@ -125,21 +120,33 @@ step keeps the risk of breaking changes low.
    547    low       GHSA-6688-9rhm-gjv2  3.4.16
    ```
 
-2. Check that npm publishes this version, and show the version that Uyuni uses
-   now:
+2. Change to your Uyuni clone:
 
    ```bash
    cd ~/Work/uyuni
+   ```
+
+3. Store the highest fixed version from step 1:
+
+   ```bash
    VERSION=3.4.17
+   ```
+
+4. Check that npm publishes this version. The command prints the version if it
+   exists:
+
+   ```bash
    npm view "$PACKAGE@$VERSION" version
+   ```
+
+5. Show the version that Uyuni uses now. You need it as `OLD` later. *deduped*
+   means that another package uses the same copy:
+
+   ```bash
    npm --prefix web ls "$PACKAGE" --all --package-lock-only
    ```
 
-   The first command prints the version if it exists. In the tree, a package at
-   the top level is a *direct* dependency. A package that appears only below
-   another package is a *transitive* dependency.
-
-3. Confirm the fix and its impact:
+6. Confirm the fix and its impact:
 
    - Open each advisory from its alert page, and find the fix in the package's
      GitHub releases or changelog.
@@ -147,10 +154,6 @@ step keeps the risk of breaking changes low.
      release notes for breaking changes that affect these places.
    - Open each CVE in the [SUSE CVE database](https://www.suse.com/security/cve/)
      and note its SUSE Bugzilla (`bsc#`) number.
-
-An AI assistant can speed up this research, see
-[Researching the next bump](../agentic-skills/README.md#researching-the-next-bump).
-Verify every result in the sources.
 
 | Situation | What to do |
 | --- | --- |
@@ -161,19 +164,16 @@ Verify every result in the sources.
 
 ## Bumping the dependency
 
-This part creates the Uyuni change, from the branch to the draft PR.
-
 ### Setting the variables
 
-1. Set the values for this bump. Take `OLD` from the tree in the previous
-   section. For `AUTHOR`, use the identifier of your earlier changelog files,
-   usually your GitHub or SUSE user name:
+1. Set the values for this bump. For `AUTHOR`, use the identifier of your
+   earlier changelog files, usually your GitHub or SUSE user name:
 
    ```bash
    PACKAGE=dompurify                      # package to bump
    OLD=3.4.15                             # current version
    VERSION=3.4.17                         # new version
-   REFS="CVE-2026-104844, bsc#1284190"    # CVE and bsc# pairs, or empty
+   REFS=""                                # "CVE-…, bsc#…" pairs, or empty
    AUTHOR=jdoe                            # your changelog identifier
    ```
 
@@ -190,9 +190,8 @@ This part creates the Uyuni change, from the branch to the draft PR.
 
 ### Creating the branch
 
-Use a Dependabot security update if possible: Dependabot then creates the
-branch and the bump for you. Otherwise, create your own branch. Follow only one
-of the two options.
+Use option A if Dependabot can create the update, otherwise option B. Follow
+only one of them.
 
 #### Option A: Dependabot security update
 
@@ -200,20 +199,19 @@ of the two options.
    **Create Dependabot security update**. If a PR exists already, the alert
    links to it. If Dependabot posts an error instead, use option B.
 
-2. Check out the PR. Replace `12345` with the PR number. The diff must show
-   `$VERSION` or higher:
+2. Check out the PR. Replace `12345` with the PR number. Every occurrence of
+   the package must show `$VERSION` or higher:
 
    ```bash
    PR=12345
    cd ~/Work/uyuni
    gh pr checkout "$PR"
    BRANCH=$(git branch --show-current)
-   git diff origin/master...HEAD -- web/package.json
+   npm --prefix web ls "$PACKAGE" --all --package-lock-only
    ```
 
-Dependabot changes only `package.json` and the lockfile. Continue with
-[Regenerating the license files](#regenerating-the-license-files). After you
-push your own commit, Dependabot no longer rebases this branch.
+3. Skip option B, and continue with
+   [Regenerating the license files](#regenerating-the-license-files).
 
 #### Option B: Your own branch
 
@@ -230,17 +228,26 @@ push your own commit, Dependabot no longer rebases this branch.
 2. Show where `package.json` declares the package:
 
    ```bash
-   jq --arg p "$PACKAGE" '{dependencies: .dependencies[$p],
-     devDependencies: .devDependencies[$p], overrides: .overrides[$p]}
-     | with_entries(select(.value != null))' web/package.json
+   jq --raw-output --arg p "$PACKAGE" '
+     [["dependencies", "devDependencies", "overrides"][] as $s
+      | select(.[$s][$p] != null) | [$s, (.[$s][$p] | tostring)]]
+     | if length == 0 then "not declared in package.json: transitive package"
+       else (["SECTION", "VERSION"], .[]) | @tsv end' web/package.json \
+     | column --table --separator $'\t'
    ```
 
-   Each entry is one declaration, for example `"dependencies": "3.4.15"`. If
-   the output is `{}`, the package is transitive: follow *Bumping a transitive
-   package* below instead of steps 3 and 4.
+   Each row is one declaration. The output is similar to this:
 
-3. Set the new version in every declaration that step 2 shows. Use the entry
-   names from the output, and keep a leading `^` or `~`. For the example above,
+   ```text
+   SECTION       VERSION
+   dependencies  3.4.15
+   ```
+
+   If the output says *not declared*, the package is transitive: follow
+   *Bumping a transitive package* below instead of steps 3 and 4.
+
+3. Set the new version in every declaration that step 2 shows. Use the section
+   names from the table, and keep a leading `^` or `~`. For the example above,
    run:
 
    ```bash
@@ -287,25 +294,16 @@ npm --prefix web install --package-lock-only --ignore-scripts
 <details>
 <summary><b>Why not <code>npm install</code> or <code>npm update</code>?</b></summary>
 
-npm's standard way to bump a direct dependency is
-`npm install "$PACKAGE@$VERSION" --save-exact`. In Uyuni, it has two pitfalls:
-
-- It fails with `EOVERRIDE` for packages that Uyuni also lists in `overrides`
-  with a copied version, for example `bootstrap`, `lodash`, and `moment`. npm
-  accepts an override for a direct dependency only if both have exactly the
-  same version.
-- Without `--save-exact`, it turns an exact version such as `"3.4.15"` into a
-  range such as `"^3.4.17"`.
-
-The other npm commands do not fit either:
-
-- `npm update` stays within the declared range and does not change
-  `package.json`. It cannot move an exact version, and for a range it takes the
+- `npm install "$PACKAGE@$VERSION" --save-exact`, npm's standard way, fails
+  with `EOVERRIDE` for packages that Uyuni also lists in `overrides`, such as
+  `bootstrap`, `lodash`, and `moment`. Without `--save-exact`, it turns an
+  exact version into a range.
+- `npm update` cannot move an exact version, and for a range it takes the
   newest version, not the smallest fix.
 - `npm audit fix` changes many packages at once, but each PR bumps only one.
 
-`npm pkg set` followed by `npm install --package-lock-only` works in every case.
-The [npm script](../automated-scripts/README.md) uses the same approach.
+`npm pkg set` with `npm install --package-lock-only` works in every case. The
+[npm script](../automated-scripts/README.md) does the same.
 
 </details>
 
@@ -313,14 +311,8 @@ Never edit `package-lock.json` by hand.
 
 ### Regenerating the license files
 
-The production build generates the license files from the installed packages.
-Never edit them by hand:
-
-- `web/html/src/vendors/npm.licenses.hash.txt` is the SHA-1 of the lockfile,
-  so every bump changes it.
-- `npm.licenses.txt` and `npm.licenses.structured.js` in the same directory
-  list the license texts and types.
-- The build also fills the `License:` line in `web/spacewalk-web.spec`.
+The build regenerates the license files in `web/html/src/vendors/` and the
+`License:` line in `web/spacewalk-web.spec`. Never edit them by hand.
 
 1. Install the packages and run the build:
 
@@ -330,30 +322,30 @@ Never edit them by hand:
    npm --prefix web run build
    ```
 
-   After a bump, the build stops with *changes to license and/or spec files
-   haven't been committed*. This is expected.
+   If the bump changes production dependencies, the build stops with
+   *changes to license and/or spec files haven't been committed*. This is
+   expected. For development-only packages, only `npm.licenses.hash.txt`
+   changes, and the build passes.
 
-2. Stage the regenerated files and build again. The build now passes:
+2. Stage the regenerated files. If the build stopped in step 1, build again. It
+   now passes:
 
    ```bash
    git add web/html/src/vendors/ web/spacewalk-web.spec
    npm --prefix web run build
    ```
 
-If the `License:` line in the spec file changed, check that the package's
-license really changed, and mention it in the PR description.
-
 ### Adding the changelog
 
-1. Create the changelog file with the version line, and open it:
+1. Create the changelog file with the version line:
 
    ```bash
    cd ~/Work/uyuni
    echo "- Update $PACKAGE from version $OLD to $VERSION" > "$CHANGES"
-   ${EDITOR:-vi} "$CHANGES"
    ```
 
-2. Add one entry per CVE. Indent continuation lines with two spaces:
+2. If the bump fixes CVEs, add one entry per CVE to the file. Indent
+   continuation lines with two spaces:
 
    ```text
    - Update postcss-selector-parser from version 7.1.0 to 7.1.7
@@ -370,7 +362,7 @@ license really changed, and mention it in the PR description.
 
 ### Validating the change
 
-1. Run the same checks as the frontend CI. The commands stop at the first
+1. Run the frontend CI checks locally. The commands stop at the first
    failure. When all pass, the last line is *All checks passed*:
 
    ```bash
@@ -386,8 +378,8 @@ license really changed, and mention it in the PR description.
    echo "All checks passed"
    ```
 
-2. Confirm that the vulnerability is gone. npm checks the same GitHub
-   advisories as Dependabot. The output must be *no known vulnerabilities*:
+2. Confirm that the vulnerability is gone. The output must be
+   *no known vulnerabilities*:
 
    ```bash
    npm --prefix web audit --package-lock-only --json \
@@ -402,7 +394,8 @@ license really changed, and mention it in the PR description.
 
 1. Review the change. Expect `package.json`, the lockfile, the license files,
    and the changelog file. The lockfile may change only the package and its own
-   dependencies:
+   dependencies. If the spec file changed, mention the license change in the
+   PR:
 
    ```bash
    cd ~/Work/uyuni
@@ -445,11 +438,9 @@ license really changed, and mention it in the PR description.
    gh pr checks "$PR" --repo uyuni-project/uyuni --watch
    ```
 
-   All checks must pass. The list must contain `changelog_test` and the four
-   frontend checks: `frontend_build`, `frontend_lint`, `frontend_unit_tests`,
-   and `frontend_typescript_compilation`. The frontend checks run only when
-   files in `web/html/src/` change. If they are missing, the license files are
-   not part of the PR.
+   All checks must pass, including `Changelog tests` and the four `frontend_*`
+   checks. If the frontend checks are missing, the license files are not part
+   of the PR.
 
 ## Backporting to the product branches
 
@@ -457,11 +448,10 @@ When CI passes on the Uyuni PR, backport the change to each product branch in
 `SUSE/spacewalk`, currently `Manager-5.1` and `Manager-5.2`.
 
 > [!IMPORTANT]
-> **Your local validation is the main check for a backport**
+> **Validate every backport locally**
 >
-> The product branches run little CI. `Manager-5.1` runs no frontend checks,
-> and `Manager-5.2` runs only the build, the unit tests, and TypeScript.
-> Validate every backport completely before you push it.
+> The product branches have their own dependency trees, and their PR checks run
+> on SUSE's internal Jenkins. Validate every backport before you push it.
 
 1. Set the values for the backport:
 
@@ -608,8 +598,8 @@ Ask for reviews when CI passes on the Uyuni PR.
    done
    ```
 
-4. Wait until a reviewer merges the PRs. Both repositories allow only
-   **Create a merge commit**.
+4. Merge the approved PRs, or let a reviewer merge them. Both repositories
+   allow only **Create a merge commit**.
 
 If the Uyuni PR changes during the review, update both backports: repeat
 [Backporting to the product branches](#backporting-to-the-product-branches).
@@ -620,36 +610,20 @@ In step 3, use `git switch --force-create`, and in step 7, push with
 
 | Problem | Solution |
 | --- | --- |
-| The build stops with *changes to license and/or spec files haven't been committed* | Expected after a bump. Stage the files and build again, see [Regenerating the license files](#regenerating-the-license-files). |
+| The build stops with *changes to license and/or spec files haven't been committed* | Expected after a bump of production dependencies. Stage the files and build again, see [Regenerating the license files](#regenerating-the-license-files). |
 | The build fails with *Currently installed … does not satisfy expected version* | Run `npm --prefix web ci`, then build again. |
-| `npm ci` claims that no `package-lock.json` exists, although it is there | The message hides the real error, usually an override that conflicts with a direct dependency. Run `npm --prefix web install --package-lock-only --ignore-scripts` to see it. Restore both files with `git restore web/package.json web/package-lock.json`, then repeat steps 2–4 of [option B](#option-b-your-own-branch). |
-| Dependabot posts an error on the alert | The package is often transitive or limited by its parent. Use option B. |
+| `npm ci` claims that no `package-lock.json` exists, although it is there | The real error is usually an override that conflicts with a direct dependency. Run `git restore web/package.json web/package-lock.json`, then repeat steps 2–4 of [option B](#option-b-your-own-branch). |
+| Dependabot posts an error on the alert | The fixed version is often outside the range that a parent package allows. Use option B. |
 | Pushing to the Dependabot branch fails | You need write access to `uyuni-project/uyuni`. Otherwise, use option B. |
 | The PR shows no frontend checks | The license files are not part of the PR. Regenerate them, commit them, and push. |
-| `changelog_test` fails | Check the line length and the `bsc#` numbers, then check *Re-run test "changelog_test"* in the PR description. |
+| `Changelog tests` fails | Check the line length and the `bsc#` numbers. Fix the changelog file and push; the check runs again. |
 | GitHub marks a commit as *Unverified* | Set up commit signing, then re-sign with `git rebase --force-rebase --gpg-sign origin/master` and push with `git push --force-with-lease`. |
 | GitHub reports conflicts with `master` | Run `git rebase origin/master`. Resolve conflicts as in [Resolving backport conflicts](#resolving-backport-conflicts), with `git rebase --continue` instead of `git cherry-pick --continue`. Push with `git push --force-with-lease`. |
 | The cherry-pick fails on a merge commit | The Uyuni PR contains a merge commit. Rebase the Uyuni branch on `master` instead of merging `master` into it. |
 
-## Lessons learned
-
-- `npm update` on a transitive package can choose a newer version than the
-  minimum fix. Always check the resolved version in the lockfile.
-- A direct dependency can also be pinned in `overrides`. Update both.
-- A core tool bump can require a companion bump. For example, `@babel/core`
-  7.29.6 required `@babel/helpers` 7.29.2.
-- A successful install is not enough. The build and the unit tests can reveal
-  API changes.
-- License file changes can be much larger than the bump itself, when one
-  transitive package replaces another.
-- An alert can receive its CVE after it was opened. Check the advisory and the
-  SUSE CVE page again before you write the changelog.
-
 ## More information
-
 - [Open npm alerts of Uyuni](https://github.com/uyuni-project/uyuni/security/dependabot?q=is%3Aopen+ecosystem%3Anpm)
 - [Uyuni changelog guidelines](https://github.com/uyuni-project/uyuni/wiki/Contributing#changelogs)
 - [How to branch and merge properly in Uyuni](https://github.com/uyuni-project/uyuni/wiki/How-to-branch-and-merge-properly)
 - [GitHub: Viewing and updating Dependabot alerts](https://docs.github.com/en/code-security/dependabot/dependabot-alerts/viewing-and-updating-dependabot-alerts)
 - [SUSE CVE database](https://www.suse.com/security/cve/)
-- [npm: overrides](https://docs.npmjs.com/cli/configuring-npm/package-json#overrides)

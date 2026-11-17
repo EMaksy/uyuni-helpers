@@ -7,10 +7,9 @@ Two scripts automate the repetitive parts of the workflow:
 - `uyuni-backport.sh` (`git backport`) applies the Uyuni PR to a Spacewalk
   product branch, pushes it, and opens a draft PR.
 
-Copy each command block as a whole. Each part starts by setting the variables
-it needs, so you can start any part in a new terminal. For the background of
-each step, see the [manual steps](../manual-steps/README.md). For all script
-options, see the [script reference](REFERENCE.md).
+Copy each command block as a whole. Each part sets the variables it needs, so
+you can start any part in a new terminal. For all script options, see the
+[script reference](REFERENCE.md).
 
 - [Bumping and backporting with the helper scripts](#bumping-and-backporting-with-the-helper-scripts)
   - [Requirements](#requirements)
@@ -37,9 +36,8 @@ You need the following:
   `uyuni-project/uyuni` and `SUSE/spacewalk`.
 - Git, the GitHub CLI (`gh`), `jq`, `sha1sum`, Node.js 22, and npm 10 or later.
 - Clones of both repositories in `~/Work/uyuni` and `~/Work/spacewalk`. If your
-  clones are in another place, adjust these paths in the commands. The backport
-  script looks for Spacewalk next to your Uyuni clone. For another location,
-  see [Configuration](REFERENCE.md#configuration).
+  clones are in another place, adjust the paths in the commands, and see
+  [Configuration](REFERENCE.md#configuration).
 
 Set up your machine once:
 
@@ -86,8 +84,7 @@ Set up your machine once:
 
 ## Bumping a dependency
 
-This part creates the Uyuni change, from the branch to the draft PR. Bump one
-package per branch and PR.
+Bump one package per branch and PR.
 
 ### Choosing the package and version
 
@@ -125,9 +122,8 @@ package per branch and PR.
      | column --table --separator $'\t'
    ```
 
-Before you bump, confirm the fix in the advisory, on GitHub, and on npm. Check
-how Uyuni uses the package, and find the `bsc#` number of each CVE, as
-described in [Choosing the target version](../manual-steps/README.md#choosing-the-target-version).
+Before you bump, confirm the fix and find the `bsc#` numbers, as in
+[Choosing the target version](../manual-steps/README.md#choosing-the-target-version).
 
 ### Setting the variables
 
@@ -138,7 +134,7 @@ described in [Choosing the target version](../manual-steps/README.md#choosing-th
    PACKAGE=dompurify                      # package to bump
    OLD=3.4.15                             # current version
    VERSION=3.4.17                         # new version
-   REFS="CVE-2026-104844, bsc#1284190"    # CVE and bsc# pairs, or empty
+   REFS=""                                # "CVE-…, bsc#…" pairs, or empty
    AUTHOR=jdoe                            # your changelog identifier
    ```
 
@@ -155,13 +151,14 @@ described in [Choosing the target version](../manual-steps/README.md#choosing-th
 
 ### Creating the branch
 
-Use a Dependabot security update if possible. Otherwise, create your own
-branch. Follow only one of the two options.
+Use option A if Dependabot can create the update, otherwise option B. Follow
+only one of them.
 
 #### Option A: Dependabot security update
 
-On one of the package's alert pages, click **Create Dependabot security update**. When Dependabot has opened the PR,
-check it out. Replace `12345` with the PR number:
+On one of the package's alert pages, click
+**Create Dependabot security update**. When Dependabot has opened the PR, check
+it out. Replace `12345` with the PR number:
 
 ```bash
 PR=12345
@@ -183,9 +180,8 @@ git switch --create "$BRANCH" origin/master
 
 ### Bumping and validating
 
-1. Bump and validate the package. The script installs the packages, then runs
-   the unit tests, TypeScript, lint, the `package.json` order check, and the
-   production build. It stops at the first failure.
+1. Bump and validate the package. The script installs the packages and runs
+   the tests, TypeScript, lint, and the build. It stops at the first failure.
 
    - For option B, bump the package:
 
@@ -201,17 +197,17 @@ git switch --create "$BRANCH" origin/master
      npm-dependency validate "$PACKAGE"
      ```
 
-2. After a bump, the build step stops with *changes to license and/or spec
-   files haven't been committed*. This is expected. Stage the regenerated files
-   and validate again:
+2. If the build step stops with *changes to license and/or spec files haven't
+   been committed*, stage the regenerated files and validate again. This is
+   expected when the bump changes production dependencies:
 
    ```bash
    git add web/html/src/vendors/ web/spacewalk-web.spec
    npm-dependency validate "$PACKAGE"
    ```
 
-3. Build Storybook, which the CI builds too, and confirm that the vulnerability
-   is gone. The last output must be *no known vulnerabilities*:
+3. Build Storybook and confirm that the vulnerability is gone. The last output
+   must be *no known vulnerabilities*:
 
    ```bash
    npm --prefix web run build-storybook &&
@@ -220,25 +216,26 @@ git switch --create "$BRANCH" origin/master
        '.vulnerabilities[$p] // "no known vulnerabilities"'
    ```
 
-   If it lists advisories instead, open them. Either the new version does not
-   fix all of them, or a dependency of the package is still vulnerable.
+   If it lists advisories, the new version does not fix all of them, or a
+   dependency of the package is still vulnerable.
 
-The npm script bumps only packages that `package.json` declares. For a
-transitive package, bump it as described in
-[Option B: Your own branch](../manual-steps/README.md#option-b-your-own-branch), then run
-`npm-dependency validate "$PACKAGE"`.
+The npm script works only for packages that `package.json` declares. For a
+transitive package, follow
+[Option B](../manual-steps/README.md#option-b-your-own-branch) and
+[Validating the change](../manual-steps/README.md#validating-the-change) in
+the manual guide.
 
 ### Adding the changelog
 
-1. Create the changelog file with the version line, and open it:
+1. Create the changelog file with the version line:
 
    ```bash
    cd ~/Work/uyuni
    echo "- Update $PACKAGE from version $OLD to $VERSION" > "$CHANGES"
-   ${EDITOR:-vi} "$CHANGES"
    ```
 
-2. Add one entry per CVE. Indent continuation lines with two spaces:
+2. If the bump fixes CVEs, add one entry per CVE to the file. Indent
+   continuation lines with two spaces:
 
    ```text
    - Update postcss-selector-parser from version 7.1.0 to 7.1.7
@@ -309,31 +306,23 @@ transitive package, bump it as described in
    gh pr checks "$PR" --repo uyuni-project/uyuni --watch
    ```
 
-   All checks must pass. The list must contain `changelog_test` and the four
-   frontend checks: `frontend_build`, `frontend_lint`, `frontend_unit_tests`,
-   and `frontend_typescript_compilation`. The frontend checks run only when
-   files in `web/html/src/` change. If they are missing, the license files are
-   not part of the PR.
+   All checks must pass, including `Changelog tests` and the four `frontend_*`
+   checks. If the frontend checks are missing, the license files are not part
+   of the PR.
 
 ## Backporting to the product branches
 
 When CI passes on the Uyuni PR, backport it to each product branch, currently
-`Manager-5.1` and `Manager-5.2`. For each branch, build the backport locally,
-validate it, then publish it.
-
-The backport script accepts only approved Uyuni PRs by default. Before
-approval, use `--allow-unapproved` only when you are sure that the PR is merged
-as it is.
+`Manager-5.1` and `Manager-5.2`: build the backport locally, validate it, then
+publish it. The script accepts only approved Uyuni PRs. Before approval, use
+`--allow-unapproved` only when you are sure that the PR is merged as it is.
 
 > [!IMPORTANT]
 > **Validate every backport before you publish it**
 >
-> The product branches run little CI. `Manager-5.1` runs no frontend checks,
-> and `Manager-5.2` runs only the build, the unit tests, and TypeScript. If
-> validation fails or changes tracked files, do not publish. Fix the cause in
-> the Uyuni PR and start again from step 2. If only the product branch needs a
-> change, publish that backport manually, as in
-> [Backporting to the product branches](../manual-steps/README.md#backporting-to-the-product-branches).
+> The product branches have their own dependency trees, and their PR checks run
+> on SUSE's internal Jenkins. If validation fails, do not publish. Fix the
+> cause in the Uyuni PR and start again from step 2.
 
 1. Set the values for the backport. Leave `BACKPORT_OPTS` empty after approval:
 
@@ -388,9 +377,10 @@ as it is.
    git status --short
    ```
 
-6. Publish the backport. The script pushes the branch and opens a draft PR
-   titled `5.1 - <Uyuni PR title>`, which links to the Uyuni PR. It does not
-   rebuild a branch that is checked out, so switch Spacewalk back first:
+6. Publish the backport. The script rebuilds the branch with new commit IDs,
+   pushes it, and opens a draft PR titled `5.1 - <Uyuni PR title>`. If the
+   target branch moved since step 2, validate again. Switch Spacewalk back
+   first, because the script does not rebuild a checked-out branch:
 
    ```bash
    git switch "$TARGET"
@@ -402,11 +392,10 @@ as it is.
 
 ## Updating backports after review changes
 
-If the Uyuni PR changes during the review, run
-[Backporting to the product branches](#backporting-to-the-product-branches)
-again. Step 2 checks out the updated PR branch, and the script rebuilds each
-backport from it. When you publish, the script replaces the remote branch with
-`--force-with-lease` and updates the existing Spacewalk PR.
+If the Uyuni PR changes during the review, repeat
+[Backporting to the product branches](#backporting-to-the-product-branches).
+The script rebuilds each backport from the updated PR and updates its
+Spacewalk PR.
 
 ## Getting the reviews
 
@@ -436,20 +425,21 @@ Ask for reviews when CI passes on the Uyuni PR.
    done
    ```
 
-4. Wait until a reviewer merges the PRs. Both repositories allow only
-   **Create a merge commit**.
+4. Merge the approved PRs, or let a reviewer merge them. Both repositories
+   allow only **Create a merge commit**.
 
 ## Special cases
 
 | Situation | What to do |
 | --- | --- |
-| The script reports uncommitted changes in Uyuni | Commit or stash your work, then run it again. |
-| *Local HEAD is not the current PR HEAD* | Run `gh pr checkout "$PR"` to get the current PR head. |
+| The script reports uncommitted changes in Uyuni | Commit or stash your work, including untracked files (`git stash --include-untracked`), then run it again. |
+| *Local HEAD is not the current PR HEAD* | Push your local commits, or run `gh pr checkout "$PR"` to get the current PR head. |
+| `gh pr checkout` fails because it cannot fast-forward the branch | The Uyuni PR was rebased. Run `gh pr checkout --force "$PR"`. It resets your local branch to the PR and drops local commits that are not pushed. |
 | *Review decision is not APPROVED* | Wait for approval, or use `--allow-unapproved` if you are sure that the PR is merged as it is. |
 | The backport branch *is checked out* | Switch the Spacewalk clone to the target branch. |
 | A cherry-pick stops with a conflict | Follow the commands that the script prints. See [Resolving a cherry-pick conflict](REFERENCE.md#resolving-a-cherry-pick-conflict). |
 | A cherry-pick reports an empty commit | The change exists on the target already. Run `git cherry-pick --skip` in the printed worktree. |
-| npm reports that the package is not declared directly | The package is transitive. See the note at the end of [Bumping and validating](#bumping-and-validating). |
+| The npm script reports *is not declared directly or in root overrides* | The package is transitive. See the note at the end of [Bumping and validating](#bumping-and-validating). |
 | The PR shows no frontend checks | The license files are not part of the PR. Regenerate them, commit them, and push. |
 | GitHub marks a commit as *Unverified* | Set up commit signing, then re-sign with `git rebase --force-rebase --gpg-sign origin/master` and push with `git push --force-with-lease`. |
 | GitHub reports conflicts with `master` | Run `git rebase origin/master`. Resolve conflicts as in [Resolving backport conflicts](../manual-steps/README.md#resolving-backport-conflicts), with `git rebase --continue` instead of `git cherry-pick --continue`. Push with `git push --force-with-lease`. |

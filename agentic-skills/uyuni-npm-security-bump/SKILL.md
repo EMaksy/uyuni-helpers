@@ -228,19 +228,23 @@ version line merely because CVE entries are present.
 
 The repository's `.github/workflows/changelogs/changelogs.py` is the
 authoritative formatter and tracker validator. It requires
-`python-bugzilla~=3.2.0`. Run the local portion from the Uyuni root with:
+`python-bugzilla~=3.2.0`. Run the local portion from the Uyuni root. Pass the
+changelog file together with every modified file; the script checks that each
+changed package has a changelog entry:
 
 ```bash
 python3 .github/workflows/changelogs/changelogs.py \
   --tracker-file .github/workflows/changelogs/trackers.xml \
   --uyuni-dir . \
+  web/package.json web/package-lock.json \
+  web/html/src/vendors/npm.licenses.hash.txt \
   web/spacewalk-web.changes.<author>.<topic>
 ```
 
 Without `BZ_TOKEN`, the script skips live Bugzilla validation. Once a PR
 exists, add `--git-repo uyuni-project/uyuni --pr-number PR` to reproduce its
-PR/commit tracker checks. After push, always verify the PR's
-`changelog_test`; unlike the `awk` guard, CI also checks entry syntax, package
+PR/commit tracker checks; this needs `GH_TOKEN`. After push, always verify the
+PR's `Changelog tests` check; unlike the `awk` guard, CI also checks entry syntax, package
 coverage, PR/commit tracker references, and bsc validity.
 
 ## Regenerate and validate
@@ -283,8 +287,10 @@ The production build regenerates `npm.licenses.txt`,
 `web/package-lock.json`. It then rewrites the `License:` line of
 `web/spacewalk-web.spec` from `npm.licenses.structured.js`. Its spec check then
 stops the build with "changes to license and/or spec files haven't been
-committed" while those files are unstaged. This is expected after a bump: stage
-`web/html/src/vendors/` and `web/spacewalk-web.spec`, then run the build again.
+committed" while those files are unstaged. This happens when production
+dependencies change; for development-only packages only the hash changes, and
+the build passes. Stage `web/html/src/vendors/` and `web/spacewalk-web.spec`,
+then run the build again if it stopped.
 
 Commit the generated files as the build produces them. Do not revert one of
 them on its own: the next build regenerates the spec from the structured list
@@ -355,17 +361,17 @@ gh pr view PR --repo uyuni-project/uyuni \
 gh pr checks PR --repo uyuni-project/uyuni
 ```
 
-Confirm that `changelog_test` passed; do not treat other green checks as a
-substitute for it. Also confirm that the four frontend checks ran:
-`frontend_build`, `frontend_lint`, `frontend_unit_tests`, and
-`frontend_typescript_compilation`. They run only when files in `web/html/src/`
+Confirm that the `Changelog tests` check passed; do not treat other green
+checks as a substitute for it. Also confirm that the four frontend checks ran:
+`frontend_build (22.x)`, `frontend_lint (22.x)`, `frontend_unit_tests (22.x)`,
+and `frontend_typescript_compilation (22.x)`. They run only when files in `web/html/src/`
 change, so a Dependabot PR has none until the regenerated license files are
 pushed. Missing frontend checks mean that the license files are not in the PR.
 
 In the handoff, remind the user that the PR needs reviews from the security
 champion and the frontend squad (`uyuni-project/frontend`). The agent's checks
-do not replace these reviews. After approval, a reviewer merges the PR; both
-repositories allow only merge commits.
+do not replace these reviews. After approval, the author or a reviewer merges
+the PR; both repositories allow only merge commits.
 
 ## Optional product backport
 

@@ -27,14 +27,14 @@ never commits or pushes.
 
 ### Usage
 
-Run the script from anywhere inside the clone:
+Run the script from anywhere inside the clone. Put options before the command:
 
 ```bash
-npm-dependency bump PACKAGE VERSION
+npm-dependency [OPTIONS] bump PACKAGE VERSION
 ```
 
 ```bash
-npm-dependency validate PACKAGE
+npm-dependency [OPTIONS] validate PACKAGE
 ```
 
 | Command or option | Effect |
@@ -52,8 +52,8 @@ The `bump` command performs these steps:
 1. It resolves the requested version with `npm view`.
 2. It updates every declaration of the package in `dependencies`,
    `devDependencies`, `optionalDependencies`, `peerDependencies`, and the root
-   `overrides`. It keeps the version style: `^` stays `^`, and an exact
-   version stays exact.
+   `overrides`. It keeps a leading `^` or `~`. Any other specifier that starts
+   with a digit or `v`, such as `1.x`, becomes the exact new version.
 3. It refreshes `package-lock.json` with
    `npm install --package-lock-only --ignore-scripts`.
 
@@ -83,10 +83,11 @@ changes made so far stay in place.
 
 The npm script has these limitations:
 
-- It bumps only packages that `package.json` declares directly or in the root
-  `overrides`.
-- It rejects complex specifiers such as Git URLs, local paths, aliases, and
-  nested overrides. Update those by hand, then run `validate`.
+- It works only for packages that `package.json` declares directly or in the
+  root `overrides`, for both `bump` and `validate`.
+- It rejects specifiers such as Git URLs, local paths, aliases, and override
+  objects. Update those by hand, then run `validate`. Overrides nested under
+  another package are neither updated nor reported.
 - It does not check advisories, write changelogs, or verify the license hash.
 - It does not build Storybook, which the Uyuni CI builds for every frontend
   change. Run `npm --prefix web run build-storybook` separately.
@@ -118,7 +119,7 @@ git backport TARGET_BRANCH [OPTIONS]
 | `--no-pr` | Push the branch, but do not create or update a PR. |
 | `--ready` | Create the PR ready for review, or mark an existing draft ready. Cannot be combined with `--no-push` or `--no-pr`. |
 | `--allow-unapproved` | Accept a source PR that is not approved. |
-| `--pr NUMBER` | Select the source PR explicitly, for example a merged PR. Its commits must exist in the local Uyuni clone. |
+| `--pr NUMBER` | Select the source PR explicitly, for example a merged PR. Its commits must exist in the local Uyuni clone. The script then skips the check that the local `HEAD` matches the PR. The current branch still names the backport branch and must not be `master`. |
 | `--spacewalk PATH` | Use this Spacewalk clone. |
 | `-h`, `--help` | Show the usage. |
 
@@ -164,7 +165,8 @@ content.
 
 The script stops before it changes anything unless all of these are true:
 
-- The current directory is a Git clone without uncommitted changes.
+- The current directory is a Git clone without uncommitted changes or untracked
+  files.
 - The current branch is not `master` and not a detached `HEAD`.
 - Without `--pr`, the branch has an Uyuni PR, and the local `HEAD` matches the
   PR head.
@@ -205,9 +207,12 @@ New PRs are drafts. A normal rerun never turns a ready PR back into a draft.
 You can run the script again at any time:
 
 - If the remote branch, the Uyuni head, and the Spacewalk base still match the
-  commit IDs in the PR body, the script only refreshes the PR title and body.
-- Otherwise, it rebuilds the backport branch on the current target branch. It
-  replaces the remote branch with `--force-with-lease`.
+  commit IDs in the PR body, and an open PR exists, the script only refreshes
+  the PR title and body. With `--ready`, it also marks a draft ready. With
+  `--no-pr`, it changes nothing.
+- Otherwise, it rebuilds the backport branch on the current target branch, with
+  new commit IDs. This also applies to the first publish after `--no-push`. It
+  replaces an existing remote branch with `--force-with-lease`.
 - With `--no-push`, it always rebuilds the local branch and never changes the
   PR.
 
@@ -244,7 +249,7 @@ path and the exact commands to finish. Resolve the conflict in that worktree:
 4. Stage the resolved files:
 
    ```bash
-   git add --update
+   git add -A
    ```
 
 5. Continue the cherry-pick. Repeat steps 2–5 if a later commit conflicts:
@@ -254,14 +259,15 @@ path and the exact commands to finish. Resolve the conflict in that worktree:
    ```
 
 6. Run the commands that the script printed. They create the backport branch
-   and, unless you used `--no-push`, push it and create the PR.
+   and, unless you used `--no-push`, push it and create or update the PR. With
+   `--no-pr`, they only push it.
 
 If Git reports a commit as empty, its change exists on the target already. Run
 `git cherry-pick --skip` instead of `--continue`.
 
 After `--no-push`, the printed commands end after creating the local branch.
 Running the script again would stop on the same conflict. Push the branch and
-create the PR manually, as in steps 11–12 of
+create the PR manually, as in step 7 of
 [Backporting to the product branches](../manual-steps/README.md#backporting-to-the-product-branches).
 
 Remove the worktree only after the PR exists:

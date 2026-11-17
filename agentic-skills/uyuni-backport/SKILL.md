@@ -14,7 +14,7 @@ Use the repository's `automated-scripts/uyuni-backport.sh` helper as the source 
 - New Spacewalk PRs are drafts by default. Add `--ready` only when the user explicitly requests a ready-for-review PR.
 - If the user names a shell alias, resolve it and preserve its arguments. Non-interactive shells may not load Bash aliases; invoke the equivalent `git backport` command directly.
 - Use `--allow-unapproved` only when the named alias includes it, the user requests it, or the current conversation has already established that option for the same backport.
-- The helper performs GitHub writes and writes to the sibling Spacewalk checkout. Obtain any required authorization immediately before running it.
+- The helper performs GitHub writes and writes to the configured Spacewalk checkout. Obtain any required authorization immediately before running it.
 
 From the Uyuni checkout, run:
 
@@ -26,9 +26,9 @@ If the Git alias is unavailable, invoke `../../automated-scripts/uyuni-backport.
 
 ## Build, validate, then publish
 
-The team's default is to validate every backport locally before publishing it. Publish directly only when the user explicitly asks for that. Local validation is the main check: `Manager-5.1` runs no frontend CI, and `Manager-5.2` runs only the build, the unit tests, and TypeScript.
+The team's default is to validate every backport locally before publishing it. Publish directly only when the user explicitly asks for that. Local validation matters: the product branches have their own dependency trees, and their PR checks (`changelog_test`, `frontend_checks`, `merge_enabled`) run on SUSE's internal Jenkins, whose logs are reachable only inside the SUSE network.
 
-The helper creates new commits, which must be signed. Before running it, check that `git config --get commit.gpgsign` prints `true`; otherwise tell the user and stop.
+The helper creates new commits, which must be signed. Before running it, check that `git -C <Spacewalk checkout> config --get commit.gpgsign` prints `true`; otherwise tell the user and stop.
 
 1. Build the local branch: `git backport TARGET_BRANCH --no-push`, plus any options the user requested. Note the printed branch name.
 2. Validate it in the Spacewalk checkout. Checking out the branch changes the user's Spacewalk worktree, so confirm that it is clean first; otherwise ask. For npm dependency changes, run the dependency helper (`../../automated-scripts/uyuni-npm-dependency.sh`, relative to this skill's directory) with `validate PACKAGE`, then `npm --prefix web run build-storybook`. Confirm that `npm --prefix web audit --package-lock-only --json` lists no vulnerability for the package, that `sha1sum web/package-lock.json` matches `web/html/src/vendors/npm.licenses.hash.txt`, run `git diff --check origin/TARGET_BRANCH...HEAD`, and check that `git status --short` shows no changed tracked files. For other changes, run focused tests that fit the change.

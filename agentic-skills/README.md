@@ -165,11 +165,12 @@ points yourself:
 - The regenerated license files are part of the commit.
 - No changelog line is longer than 67 characters.
 - `npm audit` reports no known vulnerability for the package anymore.
-- CI passes on the Uyuni PR, and the list contains `changelog_test` and the
+- CI passes on the Uyuni PR, and the list contains `Changelog tests` and the
   four `frontend_*` checks. These run only when the license files are part of
   the PR.
 - The agent validated each backport locally, including Storybook. The product
-  branches run little CI, so this is the main check.
+  branches have their own dependency trees, and their CI runs on SUSE's
+  internal Jenkins.
 - Each Spacewalk PR targets the right branch, is a draft, and has a title such
   as `5.1 - Bump …`.
 
