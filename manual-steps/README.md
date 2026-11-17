@@ -41,6 +41,17 @@ You need the following access and tools:
 - Git, the GitHub CLI (`gh`), and `jq`.
 - Node.js and npm in the versions from `engines` in `web/package.json`,
   currently Node.js 22 and npm 10 or later.
+- Git set up to sign your commits. The Uyuni contribution rules require signed
+  commits, and the same applies to backports in Spacewalk.
+
+Check that Git signs your commits. The command prints `true` if it does:
+
+```bash
+git config --get commit.gpgsign
+```
+
+If it prints nothing, set up signing with a GPG or SSH key as described in
+[GitHub: Signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits).
 
 All commands assume this directory layout:
 
@@ -285,8 +296,11 @@ Dependabot changes only `package.json` and the lockfile. You add the license
 files and the changelog in the next sections.
 
 > [!NOTE]
-> After you push your own commit to a Dependabot branch, Dependabot no longer
-> rebases that branch automatically.
+> - The frontend checks run only when files in `web/html/src/` change. A
+>   Dependabot PR therefore shows no frontend checks until you push the
+>   regenerated license files.
+> - After you push your own commit to a Dependabot branch, Dependabot no longer
+>   rebases that branch automatically.
 
 #### Bumping manually
 
@@ -452,8 +466,9 @@ Follow these rules:
 
 ### Validating the change
 
-Run the same checks as the frontend CI. Run each command from `~/Work/uyuni`
-and fix any failure before you continue.
+Run the same checks as the frontend CI, then confirm that the vulnerability is
+gone. Run each command from `~/Work/uyuni` and fix any failure before you
+continue.
 
 1. Install exactly what the lockfile specifies:
 
@@ -497,17 +512,30 @@ and fix any failure before you continue.
    npm --prefix web run build
    ```
 
-8. Check for whitespace errors in your changes:
+8. Build Storybook. The CI builds it for every frontend change:
 
    ```bash
-   git diff --check HEAD
+   npm --prefix web run build-storybook
    ```
 
-If Storybook uses the package, also build Storybook:
+9. Confirm that npm reports no known vulnerability for the package. npm checks
+   the same GitHub advisories as Dependabot:
 
-```bash
-npm --prefix web run build-storybook
-```
+   ```bash
+   npm --prefix web audit --package-lock-only --json \
+     | jq --raw-output --arg p "$PACKAGE" \
+       '.vulnerabilities[$p] // "no known vulnerabilities"'
+   ```
+
+   If the output lists advisories instead, open them. Either the new version
+   does not fix all of them, or a dependency of the package is still
+   vulnerable.
+
+10. Check for whitespace errors in your changes:
+
+    ```bash
+    git diff --check HEAD
+    ```
 
 ### Reviewing and committing
 
@@ -597,18 +625,29 @@ Open the PR as a draft and wait until CI passes.
    gh pr edit "$PR" --title "$TITLE"
    ```
 
-**For both:** wait for CI. All checks must pass, including `changelog_test`
-and `frontend_checks`:
+**For both:** wait for CI:
 
 ```bash
 gh pr checks "$PR" --repo uyuni-project/uyuni --watch
 ```
+
+All checks must pass. Make sure that the list contains `changelog_test` and
+the four frontend checks: `frontend_build`, `frontend_lint`,
+`frontend_unit_tests`, and `frontend_typescript_compilation`. If the frontend
+checks are missing, the license files are not part of the PR.
 
 ## Backporting to the product branches
 
 When CI passes on the Uyuni PR, backport the change to each maintained product
 branch in `SUSE/spacewalk`. Currently these are `Manager-5.1` and `Manager-5.2`.
 This section sets its own variables, so you can start it in a new terminal.
+
+> [!IMPORTANT]
+> **Your local validation is the main check for a backport**
+>
+> The product branches run little CI. `Manager-5.1` runs no frontend checks,
+> and `Manager-5.2` runs only the build, the unit tests, and TypeScript.
+> Validate every backport completely before you push it.
 
 1. Set the Uyuni PR number and the bumped package:
 
@@ -676,7 +715,7 @@ This section sets its own variables, so you can start it in a new terminal.
    If Git reports a conflict, resolve it as described in
    [Resolving backport conflicts](#resolving-backport-conflicts).
 
-10. Validate the backport with steps 1–7 of
+10. Validate the backport with steps 1–9 of
     [Validating the change](#validating-the-change). Product branches have
     their own dependency trees, so a passing Uyuni PR does not prove that the
     backport works. Then check the backport commits for whitespace errors:
@@ -703,7 +742,8 @@ This section sets its own variables, so you can start it in a new terminal.
     ```
 
 12. Create the draft PR. When `gh` asks for the description, add a line
-    `Backport of` followed by the link to the Uyuni PR:
+    `Backport of` followed by the link to the Uyuni PR. This line connects the
+    two PRs, so you do not need to change the Uyuni PR:
 
     ```bash
     gh pr create --repo SUSE/spacewalk --draft \
@@ -711,9 +751,6 @@ This section sets its own variables, so you can start it in a new terminal.
     ```
 
 13. Repeat from step 3 with `TARGET=Manager-5.2`.
-
-14. Add both Spacewalk PR links to the `Port(s):` line of the Uyuni PR
-    description.
 
 ### Resolving backport conflicts
 
@@ -803,6 +840,10 @@ variables, so you can start it in a new terminal.
    gh pr ready NUMBER --repo SUSE/spacewalk
    ```
 
+7. Wait until a reviewer merges the PRs after approval. Both repositories
+   allow only **Create a merge commit**, so squash and rebase merges are not
+   possible.
+
 If the Uyuni PR changes during the review, update both backports. Repeat
 [Backporting to the product branches](#backporting-to-the-product-branches)
 with two changes: in step 8, use `git switch --force-create`, and in step 11,
@@ -818,6 +859,9 @@ push with `git push --force-with-lease`.
 | Dependabot posts an error on the alert | The package is often transitive or blocked by a parent package. Bump it manually. |
 | Pushing to the Dependabot branch fails | You need write access to `uyuni-project/uyuni`. Otherwise, bump manually on your own branch. |
 | `changelog_test` fails | Check the line length and the `bsc#` numbers. Then check *Re-run test "changelog_test"* in the PR description. |
+| The PR shows no frontend checks | The license files are not part of the PR. Regenerate them, commit them, and push. |
+| GitHub marks a commit as *Unverified* | Set up commit signing, see [Requirements](#requirements). Then re-sign your commits with `git rebase --force-rebase --gpg-sign origin/master` and push with `git push --force-with-lease`. |
+| GitHub reports conflicts with `master` | Rebase with `git rebase origin/master`. Resolve conflicts as in [Resolving backport conflicts](#resolving-backport-conflicts), with `git rebase --continue` instead of `git cherry-pick --continue`. Then push with `git push --force-with-lease`. |
 | The cherry-pick fails on a merge commit | The Uyuni PR contains a merge commit. Rebase the Uyuni branch on `master` instead of merging `master` into it. |
 
 ## Lessons learned

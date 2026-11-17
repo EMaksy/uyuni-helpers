@@ -252,8 +252,21 @@ git diff --check
 
 Run `npm run test -- --runInBand` for Babel, Jest, loaders, compilers, or other
 toolchain changes, and whenever the dependency can affect runtime behavior.
-Build Storybook when the affected introduction path or functionality is
-Storybook-specific.
+Always build Storybook with `npm --prefix web run build-storybook`: the Uyuni CI
+builds it for every frontend change.
+
+Confirm that npm reports no remaining vulnerability for the package. npm uses
+the same GitHub advisories as Dependabot. If the output is not
+`no known vulnerabilities`, either the chosen version does not fix every
+advisory, or a dependency of the package is still vulnerable:
+
+```bash
+npm --prefix web audit --package-lock-only --json \
+  | jq --raw-output --arg p PACKAGE '.vulnerabilities[$p] // "no known vulnerabilities"'
+```
+
+Do not take the version that `npm audit` suggests as the target: it is the
+newest release, not the smallest fix.
 
 The production build regenerates `npm.licenses.txt`,
 `npm.licenses.structured.js`, and `npm.licenses.hash.txt` in
@@ -301,6 +314,10 @@ git status --short --branch
 Do not commit or push merely because local preparation was requested. When the
 user asks for commands, name every reviewed file explicitly in `git add`.
 
+Uyuni requires signed commits. Before committing, check that
+`git config --get commit.gpgsign` prints `true`. If it does not, tell the user
+and do not commit unsigned work.
+
 Use this title format, appending every CVE/bsc pair:
 
 ```text
@@ -330,11 +347,16 @@ gh pr checks PR --repo uyuni-project/uyuni
 ```
 
 Confirm that `changelog_test` passed; do not treat other green checks as a
-substitute for it.
+substitute for it. Also confirm that the four frontend checks ran:
+`frontend_build`, `frontend_lint`, `frontend_unit_tests`, and
+`frontend_typescript_compilation`. They run only when files in `web/html/src/`
+change, so a Dependabot PR has none until the regenerated license files are
+pushed. Missing frontend checks mean that the license files are not in the PR.
 
 In the handoff, remind the user that the PR needs reviews from the security
 champion and the frontend squad (`uyuni-project/frontend`). The agent's checks
-do not replace these reviews.
+do not replace these reviews. After approval, a reviewer merges the PR; both
+repositories allow only merge commits.
 
 ## Optional product backport
 

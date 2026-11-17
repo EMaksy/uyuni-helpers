@@ -88,6 +88,8 @@ The npm script has these limitations:
 - It rejects complex specifiers such as Git URLs, local paths, aliases, and
   nested overrides. Update those by hand, then run `validate`.
 - It does not check advisories, write changelogs, or verify the license hash.
+- It does not build Storybook, which the Uyuni CI builds for every frontend
+  change. Run `npm --prefix web run build-storybook` separately.
 
 ## Backport script
 
