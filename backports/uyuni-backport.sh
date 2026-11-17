@@ -43,7 +43,9 @@ die() {
     exit 1
 }
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve symlinks so .env is found beside the real script, not beside a link
+# in PATH.
+script_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
 config_file="$script_dir/.env"
 
 # Keep variables already supplied by the caller so the shell environment takes
@@ -308,7 +310,12 @@ continue_after_generated_license_hash_conflicts() {
 }
 
 print_conflict_recovery() {
-    printf '\nAutomatic cherry-pick stopped because of conflicts.\n' >&2
+    if [[ -z "$(git -C "$worktree" diff --name-only --diff-filter=U)" ]]; then
+        printf '\nAutomatic cherry-pick stopped: a commit has no changes on %s.\n' "$target_branch" >&2
+        printf 'Its change is probably already on the target branch.\n' >&2
+    else
+        printf '\nAutomatic cherry-pick stopped because of conflicts.\n' >&2
+    fi
     printf 'Continue in this isolated Spacewalk worktree:\n  %s\n' "$worktree" >&2
     printf '\nOpen it in a shell or editor:\n' >&2
     printf '  cd %q\n' "$worktree" >&2
@@ -322,6 +329,7 @@ print_conflict_recovery() {
     printf '  # Edit the listed files and remove all conflict markers.\n' >&2
     printf '  git add -A\n' >&2
     printf '  git cherry-pick --continue\n' >&2
+    printf '  # If Git reports the commit as empty, run instead: git cherry-pick --skip\n' >&2
     printf '  # Repeat status/add/continue if a later commit also conflicts.\n' >&2
 
     printf '\nAfter the cherry-pick has completely finished:\n' >&2

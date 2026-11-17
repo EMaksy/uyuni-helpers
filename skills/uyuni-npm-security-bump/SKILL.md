@@ -149,8 +149,9 @@ Create a fragment beside `web/spacewalk-web.changes`:
 web/spacewalk-web.changes.<author>.<topic>
 ```
 
-Infer `<author>` from the user's established fragments or Git identity; for
-this repository owner it is normally `emaksy`. Include the version change and
+Infer `<author>` from the current user's existing fragments in the target
+repository or from their Git identity. Never reuse another person's
+identifier; ask if it cannot be established. Include the version change and
 one entry per CVE:
 
 ```text
@@ -188,7 +189,9 @@ coverage, PR/commit tracker references, and bsc validity.
 
 ## Regenerate and validate
 
-Install exactly from the updated lockfile before generating licenses:
+Install exactly from the updated lockfile before generating licenses. Run
+these commands from the Uyuni repository root; its `package.json` forwards
+`build`, `lint:production`, `tsc`, `sort-package`, and `test` to `web/`:
 
 ```bash
 npm --prefix web ci --ignore-scripts --save=false
@@ -258,8 +261,11 @@ New PRs are drafts unless the user requests otherwise. Their body should have:
 - `## Changelogs` naming the fragment; and
 - `## Validation` listing the commands and concrete test totals.
 
-For a personal fork, inspect remotes and normally push to `fork`, then use a
-qualified head such as `EMaksy:BRANCH`. For an existing upstream Dependabot
+Choose the push remote from `git remote -v` and the user's established
+practice. For an upstream `uyuni-project/uyuni` remote, use the plain branch
+name as the PR head. For a personal fork, use a qualified head such as
+`GITHUB_USER:BRANCH`, with the current user's GitHub login. Ask if the remote
+cannot be established unambiguously. For an existing upstream Dependabot
 PR, push its exact head branch to `origin` only if authorized, then update the
 existing PR title with `gh pr edit`. Verify the remote PR metadata and checks
 after any external write:

@@ -93,7 +93,9 @@ UYUNI_BACKPORT_TARGET_BRANCH=Manager-5.2
 ```
 
 The `.env` file is loaded from the directory containing the script, regardless
-of the directory from which the command is run. It is ignored by Git.
+of the directory from which the command is run. Symlinks are resolved, so a
+link in `PATH` (option 2) still reads `.env` from the cloned `backports/`
+directory. It is ignored by Git.
 
 If `SPACEWALK_REPO` is empty or not configured, the script expects the Uyuni and
 Spacewalk checkouts to be sibling directories:

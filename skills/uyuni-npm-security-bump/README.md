@@ -79,7 +79,7 @@ These are the steps represented by `SKILL.md`.
 ### 1. Assess and de-duplicate
 
 ```bash
-cd ~/Work/SUSE-MANAGER-LINUX/uyuni
+cd ~/Work/uyuni
 git status --short --branch
 git remote -v
 
@@ -142,10 +142,11 @@ rg -n '"PACKAGE"' web/package.json web/package-lock.json
 
 ### 4. Add the changelog
 
-Create:
+Create the fragment below, replacing `AUTHOR` with your own identifier as used
+in your existing changelog fragments:
 
 ```text
-web/spacewalk-web.changes.emaksy.PACKAGE-VERSION
+web/spacewalk-web.changes.AUTHOR.PACKAGE-VERSION
 ```
 
 Use:
@@ -160,17 +161,17 @@ version lines. Verify the 67-character limit:
 
 ```bash
 awk 'length($0) > 67 { print NR ":" length($0) ":" $0; bad=1 }
-     END { exit bad }' web/spacewalk-web.changes.emaksy.PACKAGE-VERSION
+     END { exit bad }' web/spacewalk-web.changes.AUTHOR.PACKAGE-VERSION
 ```
 
-This catches the CI failure seen during the first run. The authoritative
+This catches the most common `changelog_test` failure. The authoritative
 validator requires `python-bugzilla~=3.2.0` and can be run from the Uyuni root:
 
 ```bash
 python3 .github/workflows/changelogs/changelogs.py \
   --tracker-file .github/workflows/changelogs/trackers.xml \
   --uyuni-dir . \
-  web/spacewalk-web.changes.emaksy.PACKAGE-VERSION
+  web/spacewalk-web.changes.AUTHOR.PACKAGE-VERSION
 ```
 
 Without `BZ_TOKEN`, it skips live Bugzilla validation. For an existing PR, add
@@ -179,6 +180,9 @@ PR's `changelog_test` passes because CI also validates entry syntax, package
 coverage, tracker references, and bsc IDs.
 
 ### 5. Regenerate and validate
+
+Run these from the Uyuni repository root; its `package.json` forwards the
+`npm run` scripts to `web/`:
 
 ```bash
 npm --prefix web ci --ignore-scripts --save=false
@@ -214,7 +218,8 @@ change that license. Never commit `web/html/src/dist/`.
 
 ### 7. Commit and open a draft PR
 
-Stage only the reviewed files. Typical files are:
+Stage only the reviewed files. Add `web/spacewalk-web.spec` only for a real
+license change (see step 6). Typical files are:
 
 ```bash
 git add \
@@ -222,11 +227,16 @@ git add \
   web/package-lock.json \
   web/html/src/vendors/npm.licenses.hash.txt \
   web/html/src/vendors/npm.licenses.txt \
-  web/spacewalk-web.changes.emaksy.PACKAGE-VERSION
+  web/spacewalk-web.changes.AUTHOR.PACKAGE-VERSION
 
 git commit -m "Bump PACKAGE from OLD to NEW"
-git push -u fork BRANCH
+git push -u REMOTE BRANCH
 ```
+
+Check `git remote -v` and push to the remote your team uses for Uyuni PR
+branches. With an upstream `uyuni-project/uyuni` remote, the PR head is the
+plain branch name. With a personal fork, use `--head YOUR_GITHUB_USER:BRANCH`
+when creating the PR.
 
 Use this title format:
 

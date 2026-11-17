@@ -27,6 +27,7 @@ Validation sequence:
   npm run test
   npm run tsc
   npm run lint:production
+  npm run sort-package -- --check
   npm run build
   git diff --check
   git status --short
@@ -269,6 +270,7 @@ run_in_package "Installed dependency tree" npm ls "$dependency" --all
 run_in_package "Unit tests" npm run test
 run_in_package "TypeScript check" npm run tsc
 run_in_package "Production lint" npm run lint:production
+run_in_package "package.json ordering" npm run sort-package -- --check
 run_in_package "Production build" npm run build
 run_in_repo "Whitespace/error-marker check" git diff --check
 

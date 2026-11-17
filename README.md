@@ -196,9 +196,10 @@ failure:
 3. `npm run test` — run unit tests.
 4. `npm run tsc` — check TypeScript.
 5. `npm run lint:production` — run production lint checks.
-6. `npm run build` — build the frontend.
-7. `git diff --check` — check the diff for whitespace errors.
-8. `git status --short` — show changed files.
+6. `npm run sort-package -- --check` — check `package.json` key order.
+7. `npm run build` — build the frontend.
+8. `git diff --check` — check the diff for whitespace errors.
+9. `git status --short` — show changed files.
 
 After success, review the package declarations, lockfile, generated license
 files, and any other reported changes. The helper leaves the changes uncommitted.
