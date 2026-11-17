@@ -16,12 +16,14 @@ Keep this workflow in mind. The guides explain every step in detail.
    otherwise create your own branch from `master`.
 5. Add a changelog entry for the version change and for each CVE with its
    `bsc#` number.
-6. Run the npm validation. The build regenerates the license files.
+6. Run the npm validation and confirm that the vulnerability is gone. The build
+   regenerates the license files.
 7. Review `package.json`, `package-lock.json`, and how Uyuni uses the package.
 8. Open a draft PR and wait until CI passes.
 9. Backport the change to `Manager-5.1` and `Manager-5.2` in `SUSE/spacewalk`.
-   Resolve conflicts there.
-10. Wait for the reviews by the security champion and the frontend squad.
+   Resolve conflicts there, and validate locally: these branches run little CI.
+10. Wait for the reviews by the security champion and the frontend squad. A
+    reviewer then merges the PRs.
 
 ## Choosing a guide
 
@@ -39,6 +41,9 @@ even if you use the scripts or an agent later.
 - **License files are generated.** `web/html/src/vendors/npm.licenses.hash.txt`
   is the SHA-1 of the lockfile, so every bump changes it. The production build
   regenerates it together with `npm.licenses.txt`. Never edit them by hand.
+- **Frontend CI needs the license files.** The frontend checks run only when
+  files in `web/html/src/` change. A Dependabot PR has none until you push the
+  regenerated license files.
 - **One package per PR.** Small changes are easier to review and to backport.
 - **Draft first.** Keep PRs as drafts until CI passes.
 - **Copy and paste.** The commands use shell variables. Each part of a guide
@@ -47,9 +52,9 @@ even if you use the scripts or an agent later.
 ## Requirements
 
 You need access to the Dependabot alerts of `uyuni-project/uyuni`, and push
-access to `uyuni-project/uyuni` and `SUSE/spacewalk`. You also need Git, the
-GitHub CLI, `jq`, Node.js 22, and npm 10 or later. For details, see the
-[manual requirements](manual-steps/README.md#requirements).
+access to `uyuni-project/uyuni` and `SUSE/spacewalk`. You also need Git set up
+to sign your commits, the GitHub CLI, `jq`, Node.js 22, and npm 10 or later.
+For details, see the [manual requirements](manual-steps/README.md#requirements).
 
 ## Repository layout
 

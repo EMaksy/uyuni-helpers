@@ -26,10 +26,12 @@ If the Git alias is unavailable, invoke `../../automated-scripts/uyuni-backport.
 
 ## Build, validate, then publish
 
-The team's default is to validate every backport locally before publishing it. Publish directly only when the user explicitly asks for that.
+The team's default is to validate every backport locally before publishing it. Publish directly only when the user explicitly asks for that. Local validation is the main check: `Manager-5.1` runs no frontend CI, and `Manager-5.2` runs only the build, the unit tests, and TypeScript.
+
+The helper creates new commits, which must be signed. Before running it, check that `git config --get commit.gpgsign` prints `true`; otherwise tell the user and stop.
 
 1. Build the local branch: `git backport TARGET_BRANCH --no-push`, plus any options the user requested. Note the printed branch name.
-2. Validate it in the Spacewalk checkout. Checking out the branch changes the user's Spacewalk worktree, so confirm that it is clean first; otherwise ask. For npm dependency changes, run the dependency helper (`../../automated-scripts/uyuni-npm-dependency.sh`, relative to this skill's directory) with `validate PACKAGE`. Also confirm that `sha1sum web/package-lock.json` matches `web/html/src/vendors/npm.licenses.hash.txt`, run `git diff --check origin/TARGET_BRANCH...HEAD`, and check that `git status --short` shows no changed tracked files. For other changes, run focused tests that fit the change.
+2. Validate it in the Spacewalk checkout. Checking out the branch changes the user's Spacewalk worktree, so confirm that it is clean first; otherwise ask. For npm dependency changes, run the dependency helper (`../../automated-scripts/uyuni-npm-dependency.sh`, relative to this skill's directory) with `validate PACKAGE`, then `npm --prefix web run build-storybook`. Confirm that `npm --prefix web audit --package-lock-only --json` lists no vulnerability for the package, that `sha1sum web/package-lock.json` matches `web/html/src/vendors/npm.licenses.hash.txt`, run `git diff --check origin/TARGET_BRANCH...HEAD`, and check that `git status --short` shows no changed tracked files. For other changes, run focused tests that fit the change.
 3. If validation fails or changes tracked files, stop and report. Do not publish.
 4. Switch the Spacewalk checkout back to the branch it was on before; the helper refuses to rebuild a checked-out branch. From the Uyuni source branch, rerun the helper with the same options, without `--no-push`.
 

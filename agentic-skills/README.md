@@ -28,6 +28,10 @@ You need the following:
   GitHub CLI logins.
 - Git, the GitHub CLI (`gh`), `jq`, Node.js 22, and npm 10 or later.
 - Clones of both repositories in `~/Work/uyuni` and `~/Work/spacewalk`.
+- Git set up to sign your commits, because the agent commits with your Git
+  configuration. Check it with `git config --get commit.gpgsign`, which prints
+  `true`. To set it up, see
+  [GitHub: Signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits).
 - The scripts, installed as described in
   [Installing the scripts](../automated-scripts/README.md#installing-the-scripts).
   The skills call them.
@@ -159,7 +163,12 @@ points yourself:
   dependencies.
 - The regenerated license files are part of the commit.
 - No changelog line is longer than 67 characters.
-- CI passes on every PR, including `changelog_test`.
+- `npm audit` reports no known vulnerability for the package anymore.
+- CI passes on the Uyuni PR, and the list contains `changelog_test` and the
+  four `frontend_*` checks. These run only when the license files are part of
+  the PR.
+- The agent validated each backport locally, including Storybook. The product
+  branches run little CI, so this is the main check.
 - Each Spacewalk PR targets the right branch, is a draft, and has a title such
   as `5.1 - Bump …`.
 

@@ -37,6 +37,17 @@ You need the following access and tools:
 - Git, the GitHub CLI (`gh`), `jq`, and `sha1sum`.
 - Node.js 22 and npm 10 or later.
 - Clones of both repositories in `~/Work/uyuni` and `~/Work/spacewalk`.
+- Git set up to sign your commits. Uyuni requires signed commits, and the
+  backport script creates new commits in Spacewalk.
+
+Check that Git signs your commits. The command prints `true` if it does:
+
+```bash
+git config --get commit.gpgsign
+```
+
+If it prints nothing, set up signing with a GPG or SSH key as described in
+[GitHub: Signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits).
 
 Log in to GitHub with the GitHub CLI:
 
@@ -243,6 +254,26 @@ BRANCH=$(git branch --show-current)
    npm-dependency validate "$PACKAGE"
    ```
 
+4. Build Storybook. The script does not build it, but the CI does for every
+   frontend change:
+
+   ```bash
+   npm --prefix web run build-storybook
+   ```
+
+5. Confirm that npm reports no known vulnerability for the package. npm checks
+   the same GitHub advisories as Dependabot:
+
+   ```bash
+   npm --prefix web audit --package-lock-only --json \
+     | jq --raw-output --arg p "$PACKAGE" \
+       '.vulnerabilities[$p] // "no known vulnerabilities"'
+   ```
+
+   If the output lists advisories instead, open them. Either the new version
+   does not fix all of them, or a dependency of the package is still
+   vulnerable.
+
 > [!NOTE]
 > The npm script bumps only packages that `package.json` declares directly or
 > in its root `overrides`. For a transitive package, bump it as in
@@ -351,12 +382,17 @@ Optionally, double-check that all is good before you commit.
    PR=$(gh pr view --json number --jq .number)
    ```
 
-6. Wait for CI. All checks must pass, including `changelog_test` and
-   `frontend_checks`:
+6. Wait for CI:
 
    ```bash
    gh pr checks "$PR" --repo uyuni-project/uyuni --watch
    ```
+
+   All checks must pass. Make sure that the list contains `changelog_test` and
+   the four frontend checks: `frontend_build`, `frontend_lint`,
+   `frontend_unit_tests`, and `frontend_typescript_compilation`. The frontend
+   checks run only when files in `web/html/src/` change. If they are missing,
+   the license files are not part of the PR.
 
 ## Backporting to the product branches
 
@@ -368,6 +404,16 @@ start it in a new terminal.
 The backport script accepts only approved Uyuni PRs by default. Before
 approval, use `--allow-unapproved` only when you are sure that the PR is merged
 as it is.
+
+> [!IMPORTANT]
+> **Validate every backport before you publish it**
+>
+> The product branches run little CI. `Manager-5.1` runs no frontend checks,
+> and `Manager-5.2` runs only the build, the unit tests, and TypeScript. If
+> validation fails or changes tracked files, do not publish. Fix the cause in
+> the Uyuni PR and start again from step 2. If only the product branch needs a
+> change, publish that backport manually, as in
+> [Backporting to the product branches](../manual-steps/README.md#backporting-to-the-product-branches).
 
 1. Set the Uyuni PR number, the bumped package, and the backport options. Leave
    `BACKPORT_OPTS` empty after approval:
@@ -431,7 +477,22 @@ as it is.
    npm-dependency validate "$PACKAGE"
    ```
 
-10. Optionally, double-check that all is good. Check the license hash, the
+10. Build Storybook:
+
+    ```bash
+    npm --prefix web run build-storybook
+    ```
+
+11. Confirm that npm reports no known vulnerability for the package. The output
+    must be *no known vulnerabilities*:
+
+    ```bash
+    npm --prefix web audit --package-lock-only --json \
+      | jq --raw-output --arg p "$PACKAGE" \
+        '.vulnerabilities[$p] // "no known vulnerabilities"'
+    ```
+
+12. Optionally, double-check that all is good. Check the license hash, the
     backport commits, and that the validation changed no tracked files:
 
     ```bash
@@ -450,38 +511,28 @@ as it is.
 
     The status output must be empty, apart from untracked files marked `??`.
 
-11. Switch the Spacewalk clone back to the target branch. The script does not
+13. Switch the Spacewalk clone back to the target branch. The script does not
     rebuild a branch that is checked out:
 
     ```bash
     git switch "$TARGET"
     ```
 
-12. Change back to your Uyuni clone:
+14. Change back to your Uyuni clone:
 
     ```bash
     cd ~/Work/uyuni
     ```
 
-13. Publish the backport. The script pushes the branch and opens a draft PR
-    titled `5.1 - <Uyuni PR title>`:
+15. Publish the backport. The script pushes the branch and opens a draft PR
+    titled `5.1 - <Uyuni PR title>`. Its description links to the Uyuni PR, so
+    you do not need to change the Uyuni PR:
 
     ```bash
     git backport "$TARGET" $BACKPORT_OPTS
     ```
 
-14. Repeat from step 2 with `TARGET=Manager-5.2`.
-
-15. Add both Spacewalk PR links to the `Port(s):` line of the Uyuni PR
-    description.
-
-> [!IMPORTANT]
-> **Do not publish a backport that failed validation**
->
-> If validation fails or changes tracked files, the published PR would contain
-> the same problem. Fix the cause in the Uyuni PR and start again from step 2.
-> If only the product branch needs the change, publish that backport manually,
-> as in [Backporting to the product branches](../manual-steps/README.md#backporting-to-the-product-branches).
+16. Repeat from step 2 with `TARGET=Manager-5.2`.
 
 ## Updating backports after review changes
 
@@ -534,6 +585,10 @@ variables, so you can start it in a new terminal.
    gh pr ready NUMBER --repo SUSE/spacewalk
    ```
 
+7. Wait until a reviewer merges the PRs after approval. Both repositories
+   allow only **Create a merge commit**, so squash and rebase merges are not
+   possible.
+
 ## Special cases
 
 | Situation | What to do |
@@ -545,3 +600,6 @@ variables, so you can start it in a new terminal.
 | A cherry-pick stops with a conflict | Follow the commands that the script prints. See [Resolving a cherry-pick conflict](REFERENCE.md#resolving-a-cherry-pick-conflict). |
 | A cherry-pick reports an empty commit | The change exists on the target already. Run `git cherry-pick --skip` in the printed worktree. |
 | npm reports that the package is not declared directly | The package is transitive. See the note in [Bumping and validating](#bumping-and-validating). |
+| The PR shows no frontend checks | The license files are not part of the PR. Regenerate them, commit them, and push. |
+| GitHub marks a commit as *Unverified* | Set up commit signing, see [Requirements](#requirements). Then re-sign your commits with `git rebase --force-rebase --gpg-sign origin/master` and push with `git push --force-with-lease`. |
+| GitHub reports conflicts with `master` | Rebase with `git rebase origin/master`. Resolve conflicts as in [Resolving backport conflicts](../manual-steps/README.md#resolving-backport-conflicts), with `git rebase --continue` instead of `git cherry-pick --continue`. Then push with `git push --force-with-lease`. |
