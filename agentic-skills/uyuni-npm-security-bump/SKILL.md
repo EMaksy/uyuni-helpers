@@ -30,7 +30,11 @@ any detail this skill does not cover.
 3. Inspect `git status`, the current branch, remotes, and any local branch with
    the proposed name. Do not discard or carry unrelated work into the bump.
 4. Check whether an open PR already handles the dependency or alert. Update
-   the existing PR branch instead of creating a duplicate.
+   the existing PR branch instead of creating a duplicate. A PR handles the
+   package only if its version fixes every open alert of the package. If
+   several open PRs touch the package, continue the one that does, preferring
+   a Dependabot PR. Report the others as superseded, and leave closing them
+   to the user.
 
 ## Assess the alert
 
@@ -89,6 +93,10 @@ gh api --method GET --paginate --slurp \
          (map(.security_advisory.severity) | unique | join(","))]
       | @tsv'
 ```
+
+Check every package for open PRs as described above, and show them next to
+the package. Keep the ranking: if the recommended package already has an open
+PR, the next step is to continue that PR, not to open another one.
 
 The target version is the highest first patched version among the package's
 open alerts. Confirm on the web that the fix is released: the advisory, the
@@ -243,9 +251,15 @@ python3 .github/workflows/changelogs/changelogs.py \
 
 Without `BZ_TOKEN`, the script skips live Bugzilla validation. Once a PR
 exists, add `--git-repo uyuni-project/uyuni --pr-number PR` to reproduce its
-PR/commit tracker checks; this needs `GH_TOKEN`. After push, always verify the
-PR's `Changelog tests` check; unlike the `awk` guard, CI also checks entry syntax, package
-coverage, PR/commit tracker references, and bsc validity.
+PR/commit tracker checks; this needs `GH_TOKEN`. That check reads the PR title
+and the full messages of the commits already on GitHub, not local commits.
+Every CVE and bsc in the fragment must appear in one of them; otherwise it
+fails with `CVE-... is not mentioned in PR title or in commit messages`. An
+existing PR, such as a Dependabot PR, has none of them in its title, so run
+this check before pushing to it and expect that failure until the title is
+updated (see the handoff section). After push, always verify the PR's
+`Changelog tests` check; unlike the `awk` guard, CI also checks entry syntax,
+package coverage, PR/commit tracker references, and bsc validity.
 
 ## Regenerate and validate
 
@@ -339,6 +353,22 @@ Use this title format, appending every CVE/bsc pair:
 Bump PACKAGE from OLD to NEW in /web (CVE-..., bsc#...)
 ```
 
+The `Changelog tests` check fails unless every CVE and bsc in the changelog
+fragment appears in the PR title or in a commit message of the PR. Keep the
+commit subject short and list the pairs in the body of the commit that adds
+the fragment, so that the check passes whatever the PR title says:
+
+```bash
+git commit --file - <<'EOF'
+Bump PACKAGE from OLD to NEW
+
+CVE-..., bsc#...; CVE-..., bsc#...
+EOF
+```
+
+On a Dependabot branch, use a subject such as `Add PACKAGE changelog and
+update npm licenses`.
+
 New PRs are drafts unless the user requests otherwise. Their body should have:
 
 - `## What does this PR change?` with the bump, vulnerability, and companion
@@ -351,9 +381,11 @@ practice. For an upstream `uyuni-project/uyuni` remote, use the plain branch
 name as the PR head. For a personal fork, use a qualified head such as
 `GITHUB_USER:BRANCH`, with the current user's GitHub login. Ask if the remote
 cannot be established unambiguously. For an existing upstream Dependabot
-PR, push its exact head branch to `origin` only if authorized, then update the
-existing PR title with `gh pr edit`. Verify the remote PR metadata and checks
-after any external write:
+PR, and only if authorized, first update the existing PR title with
+`gh pr edit`, then push its exact head branch to `origin`. In the reverse
+order, the push starts `Changelog tests` against the old Dependabot title,
+and the check fails unless the commit message lists the pairs. Verify the
+remote PR metadata and checks after any external write:
 
 ```bash
 gh pr view PR --repo uyuni-project/uyuni \
@@ -362,7 +394,12 @@ gh pr checks PR --repo uyuni-project/uyuni
 ```
 
 Confirm that the `Changelog tests` check passed; do not treat other green
-checks as a substitute for it. Also confirm that the four frontend checks ran:
+checks as a substitute for it. If it reports `... is not mentioned in PR title
+or in commit messages`, set the PR title with every CVE/bsc pair. The
+Changelogs workflow also runs on PR `edited` events, so the title change
+reruns the check without a new push. Judge the latest run.
+
+Also confirm that the four frontend checks ran:
 `frontend_build (22.x)`, `frontend_lint (22.x)`, `frontend_unit_tests (22.x)`,
 and `frontend_typescript_compilation (22.x)`. They run only when files in `web/html/src/`
 change, so a Dependabot PR has none until the regenerated license files are
